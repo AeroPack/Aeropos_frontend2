@@ -433,15 +433,21 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Drawer(
       child: Column(
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Color(0xFF0F172A)),
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF0F172A)),
             child: Center(
-              child: Text(
-                "AeroPOS",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.go('/dashboard');
+                },
+                child: const Text(
+                  "AeroPOS",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),

@@ -46,6 +46,7 @@ class ServiceLocator {
   late final UnitRepository unitRepository;
   late final BrandRepository brandRepository;
   late final AuthRepository authRepository;
+  late final AuthRemoteDataSource authRemoteDataSource;
   late final ProfileRepository profileRepository;
 
   late final InventoryService inventoryService;
@@ -72,7 +73,7 @@ class ServiceLocator {
     dio = DioClient.createDio(authInterceptor);
 
     // Initialize data sources
-    final authRemoteDataSource = AuthRemoteDataSourceImpl(dio);
+    authRemoteDataSource = AuthRemoteDataSourceImpl(dio);
 
     // Initialize repositories
     productRepository = ProductRepository(database);

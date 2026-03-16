@@ -93,8 +93,8 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
         profile['businessName'] ?? profile['companyName'] ?? '';
     _businessAddressController.text = profile['businessAddress'] ?? '';
     _taxIdController.text = profile['taxId'] ?? '';
-    _phoneController.text = profile['phone'] ?? '';
-    _emailController.text = profile['email'] ?? '';
+    _phoneController.text = profile['companyPhone'] ?? '';
+    _emailController.text = profile['companyEmail'] ?? '';
 
     // Update profile image URL (Logo)
     _profileImageUrl = profile['profileImage'] ?? profile['imageUrl'];
@@ -109,8 +109,8 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
         'businessName': _businessNameController.text,
         'businessAddress': _businessAddressController.text,
         'taxId': _taxIdController.text,
-        'phone': _phoneController.text,
-        // Email is read-only, not sending it for update to avoid accidental change checks
+        'companyPhone': _phoneController.text,
+        'companyEmail': _emailController.text,
       };
 
       final success = await ref

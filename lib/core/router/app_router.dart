@@ -5,6 +5,7 @@ import 'package:ezo/features/auth/presentation/screens/signup_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/email_verification_pending_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/reset_password_screen.dart';
+import 'package:ezo/features/auth/presentation/screens/company_picker_screen.dart';
 import 'package:ezo/features/inventory/products/item_list.dart';
 import 'package:ezo/features/inventory/products/add_product_screen.dart';
 import 'package:ezo/features/inventory/products/product_detail_screen.dart';
@@ -27,6 +28,7 @@ import 'package:ezo/features/invoice/screens/invoice_form_screen.dart';
 import 'package:ezo/features/invoice/screens/invoice_history_screen.dart';
 import 'package:ezo/features/profile/presentation/screens/user_profile_screen.dart';
 import 'package:ezo/features/profile/presentation/screens/company_profile_screen.dart';
+import 'package:ezo/features/profile/presentation/screens/my_companies_screen.dart';
 import 'package:ezo/features/settings/screens/settings_screen.dart';
 import 'package:ezo/features/settings/screens/role_settings_screen.dart';
 
@@ -42,18 +44,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final isLoggedIn = authState.status == AuthStatus.authenticated;
+      final isCompanySelection = authState.status == AuthStatus.companySelection;
       final isPublicRoute =
           state.uri.path == '/login' ||
           state.uri.path == '/signup' ||
           state.uri.path == '/forgot-password' ||
-          state.uri.path == '/reset-password';
+          state.uri.path == '/reset-password' ||
+          state.uri.path == '/select-company';
 
-      if (!isLoggedIn && !isPublicRoute) {
+      // Redirect to company selection screen
+      if (isCompanySelection && state.uri.path != '/select-company') {
+        return '/select-company';
+      }
+
+      if (!isLoggedIn && !isCompanySelection && !isPublicRoute) {
         return '/login';
       }
 
       if (isLoggedIn) {
-        // Check if email is verified
         final user = authState.user;
         final isVerified = user?.isEmailVerified ?? false;
         final isPendingScreen = state.uri.path == '/verify-pending';
@@ -90,6 +98,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final token = state.uri.queryParameters['token'];
           return ResetPasswordScreen(token: token);
         },
+      ),
+      GoRoute(
+        path: '/select-company',
+        builder: (context, state) => const CompanyPickerScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -269,6 +281,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/profile',
                 builder: (context, state) => const UserProfileScreen(),
+              ),
+              GoRoute(
+                path: '/my-companies',
+                builder: (context, state) => const MyCompaniesScreen(),
               ),
             ],
           ),

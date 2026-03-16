@@ -5,6 +5,7 @@ import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../di/service_locator.dart';
 import 'sync_progress_dialog.dart';
 import 'pos_calculator.dart';
+import 'company_switcher.dart';
 
 class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback? onSidebarToggle;
@@ -57,33 +58,37 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
       leading:
           leading ??
           (isActuallyDesktop
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.storefront,
-                        color: Color(0xFF0F172A),
-                        size: 28,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        "Aero",
-                        style: TextStyle(
+              ? InkWell(
+                  onTap: () => context.go('/dashboard'),
+                  mouseCursor: SystemMouseCursors.click,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.storefront,
                           color: Color(0xFF0F172A),
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                          size: 28,
                         ),
-                      ),
-                      const Text(
-                        "POS",
-                        style: TextStyle(
-                          color: Color.fromARGB(255, 0, 191, 255),
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(width: 8),
+                        const Text(
+                          "Aero",
+                          style: TextStyle(
+                            color: Color(0xFF0F172A),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    ],
+                        const Text(
+                          "POS",
+                          style: TextStyle(
+                            color: Color.fromARGB(255, 0, 191, 255),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : null),
@@ -175,40 +180,8 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
           [
             if (customActions != null) ...customActions!,
             if (isSmallDesktop) ...[
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  children: [
-                    Image.network(
-                      'https://flagcdn.com/w20/pk.png',
-                      width: 20,
-                      errorBuilder: (c, o, s) =>
-                          const Icon(Icons.flag, size: 16),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      "Freshmart",
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ],
-                ),
-              ),
+              const CompanySwitcher(),
+              const SizedBox(width: 8),
             ],
             if (isMediumDesktop) ...[
               Padding(
@@ -308,6 +281,9 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                     case 'company':
                       context.push('/company-profile');
                       break;
+                    case 'manage_companies':
+                      context.push('/my-companies');
+                      break;
                     case 'settings':
                       context.push('/settings');
                       break;
@@ -335,6 +311,18 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                       leading: Icon(Icons.business_outlined, size: 20),
                       title: Text(
                         'Company Profile',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'manage_companies',
+                    child: ListTile(
+                      leading: Icon(Icons.business_rounded, size: 20),
+                      title: Text(
+                        'Manage Companies',
                         style: TextStyle(fontSize: 14),
                       ),
                       contentPadding: EdgeInsets.zero,

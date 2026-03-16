@@ -5,22 +5,79 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/sync_service.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../../../core/models/user.dart';
+import '../../../../core/models/company.dart';
 
-enum AuthStatus { authenticated, unauthenticated, loading }
+enum AuthStatus { authenticated, unauthenticated, loading, companySelection }
 
 class AuthState {
   final AuthStatus status;
   final String? errorMessage;
   final User? user;
+  final Company? company; // Currently active company
+  final List<Company>? companies; // For company selection or "My Companies" list
+  final String? pendingEmail; // Email used for login (needed to retry with companyId)
+  final String? pendingPassword; // Password used for login
+  final String? pendingGoogleIdToken; // For Google login retry
+  final String? pendingGoogleAccessToken; // For Google login retry
 
-  AuthState({required this.status, this.errorMessage, this.user});
+  AuthState({
+    required this.status,
+    this.errorMessage,
+    this.user,
+    this.company,
+    this.companies,
+    this.pendingEmail,
+    this.pendingPassword,
+    this.pendingGoogleIdToken,
+    this.pendingGoogleAccessToken,
+  });
 
   factory AuthState.initial() => AuthState(status: AuthStatus.loading);
-  factory AuthState.authenticated(User user) =>
-      AuthState(status: AuthStatus.authenticated, user: user);
+  factory AuthState.authenticated(User user, Company? company) =>
+      AuthState(status: AuthStatus.authenticated, user: user, company: company);
   factory AuthState.unauthenticated([String? error]) =>
       AuthState(status: AuthStatus.unauthenticated, errorMessage: error);
   factory AuthState.loading() => AuthState(status: AuthStatus.loading);
+  factory AuthState.companySelection({
+    required List<Company> companies,
+    String? email,
+    String? password,
+    String? googleIdToken,
+    String? googleAccessToken,
+  }) =>
+      AuthState(
+        status: AuthStatus.companySelection,
+        companies: companies,
+        pendingEmail: email,
+        pendingPassword: password,
+        pendingGoogleIdToken: googleIdToken,
+        pendingGoogleAccessToken: googleAccessToken,
+      );
+
+  AuthState copyWith({
+    AuthStatus? status,
+    String? errorMessage,
+    User? user,
+    Company? company,
+    List<Company>? companies,
+    String? pendingEmail,
+    String? pendingPassword,
+    String? pendingGoogleIdToken,
+    String? pendingGoogleAccessToken,
+  }) {
+    return AuthState(
+      status: status ?? this.status,
+      errorMessage: errorMessage ?? this.errorMessage,
+      user: user ?? this.user,
+      company: company ?? this.company,
+      companies: companies ?? this.companies,
+      pendingEmail: pendingEmail ?? this.pendingEmail,
+      pendingPassword: pendingPassword ?? this.pendingPassword,
+      pendingGoogleIdToken: pendingGoogleIdToken ?? this.pendingGoogleIdToken,
+      pendingGoogleAccessToken:
+          pendingGoogleAccessToken ?? this.pendingGoogleAccessToken,
+    );
+  }
 }
 
 class AuthController extends StateNotifier<AuthState> {
@@ -37,17 +94,7 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final isLoggedIn = await _authRepository.checkAuthStatus();
       if (isLoggedIn) {
-        final user = await _authRepository.getCurrentUser();
-        if (user != null) {
-          state = AuthState.authenticated(user);
-          // Router will handle redirect if !user.isEmailVerified
-        } else {
-          // Token exists but user load failed (maybe token expired or invalid)
-          // Should we logout? Or just be unauthenticated?
-          // For now, let's treat as unauthenticated
-          await _authRepository.logout();
-          state = AuthState.unauthenticated();
-        }
+        await _completeLogin();
       } else {
         state = AuthState.unauthenticated();
       }
@@ -59,33 +106,125 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> login(String email, String password) async {
     state = AuthState.loading();
     try {
-      // Perform login and store token
-      await _authRepository.login(email, password);
+      final response = await _authRepository.login(email, password);
 
-      // Trigger incremental data sync after successful login
-      print('Login successful, syncing data...');
-      await _syncService.pull();
-      print('Data sync completed');
-
-      final user = await _authRepository.getCurrentUser();
-      if (user != null) {
-        state = AuthState.authenticated(user);
-        // Router will handle redirect if !user.isEmailVerified
-      } else {
-        throw Exception("Failed to load user profile after login");
+      // Check if multi-company selection is required
+      if (response['requiresCompanySelection'] == true) {
+        final companiesList = (response['companies'] as List)
+            .map((c) => Company.fromJson(c))
+            .toList();
+        state = AuthState.companySelection(
+          companies: companiesList,
+          email: email,
+          password: password,
+        );
+        return;
       }
+
+      // Single company — proceed with login
+      await _completeLogin();
     } catch (e) {
-      String message = "Login failed";
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e.response!.data['error'];
-        } else {
-          message = "Login failed: ${e.message}";
-        }
+      state = AuthState.unauthenticated(_extractErrorMessage(e, "Login failed"));
+    }
+  }
+
+  /// Select a company after multi-company login prompt
+  Future<void> selectCompany(int companyId) async {
+    final email = state.pendingEmail;
+    final password = state.pendingPassword;
+    final googleIdToken = state.pendingGoogleIdToken;
+    final googleAccessToken = state.pendingGoogleAccessToken;
+
+    state = AuthState.loading();
+    try {
+      if (email != null && password != null) {
+        // Re-login with specific companyId
+        await _authRepository.login(email, password, companyId: companyId);
+      } else if (googleIdToken != null || googleAccessToken != null) {
+        // Re-do Google login with specific companyId
+        await _authRepository.googleLogin(
+          idToken: googleIdToken,
+          accessToken: googleAccessToken,
+          companyId: companyId,
+        );
       } else {
-        message = "Login failed: ${e.toString()}";
+        throw Exception("No pending credentials for company selection");
       }
-      state = AuthState.unauthenticated(message);
+
+      await _completeLogin();
+    } catch (e) {
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Company selection failed"),
+      );
+    }
+  }
+
+  /// Switch to a different company (in-app, already authenticated)
+  Future<void> switchCompany(int companyId) async {
+    state = AuthState.loading();
+    try {
+      await _authRepository.switchCompany(companyId);
+
+      // Clear local data and re-sync for the new company
+      print('Switching company, clearing local data...');
+      final database = ServiceLocator.instance.database;
+      await database.clearAllData();
+
+      print('Re-syncing data for new company...');
+      await _syncService.pull();
+      print('Company switch sync completed');
+
+      // Also fetch company info if not returned by getCurrentUser (or handle both)
+      // For now, let's just re-run _completeLogin which does full refresh
+      await _completeLogin();
+    } catch (e) {
+      // On failure, try to restore previous state
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        errorMessage: _extractErrorMessage(e, "Company switch failed"),
+      );
+    }
+  }
+
+  /// Refresh the list of companies the user is part of
+  Future<void> refreshCompanies() async {
+    // Only refresh if authenticated
+    if (state.status != AuthStatus.authenticated) return;
+
+    try {
+      final companies = await _authRepository.getMyCompanies();
+      state = state.copyWith(companies: companies);
+    } catch (e) {
+      print("Error refreshing companies: $e");
+    }
+  }
+
+  /// Create a new company (Admin only)
+  Future<bool> createCompany({
+    required String businessName,
+    String? businessAddress,
+    String? companyPhone,
+    String? companyEmail,
+  }) async {
+    final prevState = state;
+    state = state.copyWith(status: AuthStatus.loading);
+
+    try {
+      await _authRepository.createCompany({
+        'businessName': businessName,
+        'businessAddress': businessAddress,
+        'companyPhone': companyPhone,
+        'companyEmail': companyEmail,
+      });
+
+      state = prevState; // Restore previous state (authenticated)
+      await refreshCompanies(); // Refresh the list
+      return true;
+    } catch (e) {
+      state = prevState.copyWith(
+        errorMessage: _extractErrorMessage(e, "Failed to create company"),
+      );
+      return false;
     }
   }
 
@@ -93,52 +232,22 @@ class AuthController extends StateNotifier<AuthState> {
     state = AuthState.loading();
     try {
       await _authRepository.signup(data);
-
-      // Trigger incremental data sync after successful signup
-      print('Signup successful, syncing data...');
-      await _syncService.pull();
-      print('Data sync completed');
-
-      final user = await _authRepository.getCurrentUser();
-      if (user != null) {
-        state = AuthState.authenticated(user);
-        // Router will handle redirect if !user.isEmailVerified (after signup)
-      } else {
-        throw Exception("Failed to load user profile after signup");
-      }
+      await _completeLogin();
     } catch (e) {
-      String message = "Signup failed";
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e
-              .response!
-              .data['error']; // "User with this email already exists"
-        } else {
-          message = "Signup failed: ${e.message}";
-        }
-      } else {
-        message = "Signup failed: ${e.toString()}";
-      }
-      state = AuthState.unauthenticated(message);
+      state = AuthState.unauthenticated(_extractErrorMessage(e, "Signup failed"));
     }
   }
 
   Future<void> signInWithGoogle() async {
     state = AuthState.loading();
     try {
-      // Force sign out first to clear any cached session.
-      // This prevents the popup from hanging on auto-sign-in,
-      // which triggers COOP (Cross-Origin-Opener-Policy) popup blocking.
       final GoogleSignIn googleSignIn = GoogleSignIn(
-        // Force account selection to avoid popup hang caused by auto sign-in + COOP
         scopes: ['email', 'profile'],
       );
       await googleSignIn.signOut();
 
-      // Step 1: Authenticate
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
-      // If googleUser is null, it means the user cancelled the sign-in flow.
       if (googleUser == null) {
         state = AuthState.unauthenticated();
         return;
@@ -146,7 +255,6 @@ class AuthController extends StateNotifier<AuthState> {
 
       print('Google User: ${googleUser.email}');
 
-      // Step 2: Get Tokens
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
@@ -156,47 +264,33 @@ class AuthController extends StateNotifier<AuthState> {
         throw Exception("Failed to retrieve Google Sign-In Tokens");
       }
 
-      if (idToken != null) {
-        print('Google ID Token retrieved successfully');
-      } else {
-        print('Google ID Token is null, falling back to Access Token');
-      }
-
-      await _authRepository.googleLogin(
+      final response = await _authRepository.googleLogin(
         idToken: idToken,
         accessToken: googleAuth.accessToken,
       );
 
-      // Trigger incremental data sync after successful login
-      print('Google Login successful, syncing data...');
-      await _syncService.pull();
-      print('Data sync completed');
-
-      final user = await _authRepository.getCurrentUser();
-      if (user != null) {
-        state = AuthState.authenticated(user);
-        // Router will handle redirect if !user.isEmailVerified
-      } else {
-        throw Exception("Failed to load user profile after login");
+      // Check if multi-company selection is required
+      if (response['requiresCompanySelection'] == true) {
+        final companiesList = (response['companies'] as List)
+            .map((c) => Company.fromJson(c))
+            .toList();
+        state = AuthState.companySelection(
+          companies: companiesList,
+          googleIdToken: idToken,
+          googleAccessToken: googleAuth.accessToken,
+        );
+        return;
       }
+
+      await _completeLogin();
     } catch (e) {
-      String message = "Google Sign-In failed";
-      print('Google Sign-In Exception: $e');
-
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e.response!.data['error'];
-        } else {
-          message = "Google Sign-In failed: ${e.message}";
-        }
-      } else {
-        if (e.toString().contains("canceled")) {
-          state = AuthState.unauthenticated();
-          return;
-        }
-        message = "Google Sign-In failed: ${e.toString()}";
+      if (e.toString().contains("canceled")) {
+        state = AuthState.unauthenticated();
+        return;
       }
-      state = AuthState.unauthenticated(message);
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Google Sign-In failed"),
+      );
     }
   }
 
@@ -215,15 +309,9 @@ class AuthController extends StateNotifier<AuthState> {
         "Password reset link sent to your email",
       );
     } catch (e) {
-      String message = "Failed to send reset link";
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e.response!.data['error'];
-        } else {
-          message = e.message ?? message;
-        }
-      }
-      state = AuthState.unauthenticated(message);
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Failed to send reset link"),
+      );
     }
   }
 
@@ -235,15 +323,9 @@ class AuthController extends StateNotifier<AuthState> {
         "Verification email sent! Please check your inbox.",
       );
     } catch (e) {
-      String message = "Failed to resend verification email";
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e.response!.data['error'];
-        } else {
-          message = e.message ?? message;
-        }
-      }
-      state = AuthState.unauthenticated(message);
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Failed to resend verification email"),
+      );
     }
   }
 
@@ -255,16 +337,42 @@ class AuthController extends StateNotifier<AuthState> {
         "Password reset successfully. Please login.",
       );
     } catch (e) {
-      String message = "Failed to reset password";
-      if (e is DioException) {
-        if (e.response?.data is Map && e.response!.data['error'] != null) {
-          message = e.response!.data['error'];
-        } else {
-          message = e.message ?? message;
-        }
-      }
-      state = AuthState.unauthenticated(message);
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Failed to reset password"),
+      );
     }
+  }
+
+  /// Complete login flow: sync data and load user
+  Future<void> _completeLogin() async {
+    print('Login successful, syncing data...');
+    await _syncService.pull();
+    print('Data sync completed');
+
+    final response = await ServiceLocator.instance.authRemoteDataSource.getCurrentUser();
+    final user = User.fromJson(response['employee'] ?? response);
+    final company =
+        response['company'] != null ? Company.fromJson(response['company']) : null;
+
+    final companies = await _authRepository.getMyCompanies();
+
+    state = AuthState(
+      status: AuthStatus.authenticated,
+      user: user,
+      company: company,
+      companies: companies,
+    );
+  }
+
+  /// Extract error message from various exception types
+  String _extractErrorMessage(dynamic e, String fallback) {
+    if (e is DioException) {
+      if (e.response?.data is Map && e.response!.data['error'] != null) {
+        return e.response!.data['error'];
+      }
+      return e.message ?? fallback;
+    }
+    return "$fallback: ${e.toString()}";
   }
 }
 

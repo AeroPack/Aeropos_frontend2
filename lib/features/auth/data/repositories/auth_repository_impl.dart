@@ -3,6 +3,7 @@ import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/models/user.dart';
+import '../../../../core/models/company.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remoteDataSource;
@@ -12,12 +13,14 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._remoteDataSource, this._storage, this._database);
 
   @override
-  Future<void> login(String email, String password) async {
-    final response = await _remoteDataSource.login(email, password);
+  Future<Map<String, dynamic>> login(String email, String password, {int? companyId}) async {
+    final response = await _remoteDataSource.login(email, password, companyId: companyId);
+    // Only store token if login is complete (not company selection)
     final token = response['token'];
     if (token != null) {
       await _storage.write(key: 'auth_token', value: token);
     }
+    return response;
   }
 
   @override
@@ -30,20 +33,22 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> googleLogin({String? idToken, String? accessToken}) async {
+  Future<Map<String, dynamic>> googleLogin({String? idToken, String? accessToken, int? companyId}) async {
     final response = await _remoteDataSource.googleLogin(
       idToken: idToken,
       accessToken: accessToken,
+      companyId: companyId,
     );
+    // Only store token if login is complete (not company selection)
     final token = response['token'];
     if (token != null) {
       await _storage.write(key: 'auth_token', value: token);
     }
+    return response;
   }
 
   @override
   Future<void> logout() async {
-    // Safety check: verify no pending changes before clearing data
     try {
       final hasPending =
           await (_database.select(_database.products)
@@ -59,10 +64,7 @@ class AuthRepositoryImpl implements AuthRepository {
       print('Error checking pending changes during logout: $e');
     }
 
-    // Clear all local data from the database
     await _database.clearAllData();
-
-    // Delete the authentication token
     await _storage.delete(key: 'auth_token');
   }
 
@@ -79,7 +81,6 @@ class AuthRepositoryImpl implements AuthRepository {
       if (responseMap.containsKey('employee')) {
         return User.fromJson(responseMap['employee']);
       }
-      // Fallback if the response is flat (unlikely given backend code, but safe)
       return User.fromJson(responseMap);
     } catch (e) {
       print("Error fetching user: $e");
@@ -106,4 +107,28 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> resendVerificationEmail(String email) async {
     await _remoteDataSource.resendVerificationEmail(email);
   }
+
+  @override
+  Future<List<Company>> getMyCompanies() async {
+    final response = await _remoteDataSource.getMyCompanies();
+    final List<dynamic> companiesJson = response['companies'] ?? [];
+    return companiesJson.map((c) => Company.fromJson(c)).toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> createCompany(Map<String, dynamic> data) async {
+    return await _remoteDataSource.createCompany(data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> switchCompany(int companyId) async {
+    final response = await _remoteDataSource.switchCompany(companyId);
+    // Store new token
+    final token = response['token'];
+    if (token != null) {
+      await _storage.write(key: 'auth_token', value: token);
+    }
+    return response;
+  }
 }
+

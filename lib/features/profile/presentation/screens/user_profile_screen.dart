@@ -142,7 +142,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       // Prepare profile data
       final profileData = {
         'name': fullName.isNotEmpty ? fullName : _nameController.text,
-        'businessName': _companyNameController.text,
         'userName': _userNameController.text,
         'email': _emailController.text,
         'phone': _phoneController.text,
@@ -375,8 +374,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                                             ),
                                             const SizedBox(height: 20),
                                             _buildField(
-                                              "Company Name *",
+                                              "Company Name",
                                               _companyNameController,
+                                              readOnly: true,
                                             ),
                                           ],
                                         )
@@ -391,8 +391,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                                             const SizedBox(width: 20),
                                             Expanded(
                                               child: _buildField(
-                                                "Company Name *",
+                                                "Company Name",
                                                 _companyNameController,
+                                                readOnly: true,
                                               ),
                                             ),
                                           ],
