@@ -4,7 +4,6 @@ import 'package:ezo/core/di/service_locator.dart';
 import 'package:ezo/core/layout/pos_design_system.dart';
 import 'package:ezo/core/widgets/employee_form_dialog.dart';
 import 'package:ezo/core/database/app_database.dart';
-import 'package:drift/drift.dart' as drift;
 import '../../core/widgets/role_guard.dart';
 
 class EmployeeListScreen extends StatefulWidget {
@@ -84,7 +83,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                     border: Border.all(color: PosColors.border),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha: 0.02),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -124,7 +123,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
                                   return SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
-                                    child: Container(
+                                    child: SizedBox(
                                       width: tableWidth,
                                       child: Column(
                                         crossAxisAlignment:

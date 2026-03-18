@@ -69,7 +69,7 @@ class _MyCompaniesScreenState extends ConsumerState<MyCompaniesScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.all(24),
                     itemCount: companies.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    separatorBuilder: (_, index) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final company = companies[index];
                       final isCurrent = company.id == currentCompanyId;
@@ -191,7 +191,7 @@ class _CompanyManagementCard extends StatelessWidget {
                       child: Image.network(
                         company.logoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildInitial(context),
+                        errorBuilder: (_, _, _) => _buildInitial(context),
                       ),
                     )
                   : _buildInitial(context),

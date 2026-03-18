@@ -7,7 +7,7 @@ class ResponsiveDataView extends StatelessWidget {
   final List<DataRow> rows;
   final Widget Function(int index) mobileItemBuilder; // How it looks on mobile
 
-  const ResponsiveDataView({
+  const ResponsiveDataView({super.key, 
      required this.columns,
      required this.rows,
      required this.mobileItemBuilder,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
-import '../di/service_locator.dart';
 import '../constants/permissions.dart';
 import '../widgets/master_header.dart';
 
@@ -15,12 +14,14 @@ class SidebarItem {
   final IconData icon;
   final int branchIndex;
   final String? requiredPermission;
+  final String? routePush;
 
   const SidebarItem({
     required this.label,
     required this.icon,
     required this.branchIndex,
     this.requiredPermission,
+    this.routePush,
   });
 }
 
@@ -118,7 +119,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         SidebarItem(
           label: 'Employees',
           icon: Icons.badge_outlined,
-          branchIndex: 16,
+          branchIndex: 15,
           requiredPermission: AppPermissions.manageEmployees,
         ),
       ],
@@ -132,7 +133,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         SidebarItem(
           label: 'New Invoice',
           icon: Icons.add_chart_outlined,
-          branchIndex: 13,
+          branchIndex: 12,
         ),
         SidebarItem(
           label: 'Sales History',
@@ -154,7 +155,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         SidebarItem(
           label: 'Invoice Template',
           icon: Icons.description_outlined,
-          branchIndex: 12,
+          branchIndex: -1,
+          routePush: '/invoice-templates',
         ),
       ],
     ),
@@ -415,7 +417,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                             icon: item.icon,
                             label: item.label,
                             isSelected: _isItemActive(item),
-                            onTap: () => _onBranchSelected(item.branchIndex),
+                            onTap: () {
+                              if (item.routePush != null) {
+                                context.push(item.routePush!);
+                              } else {
+                                _onBranchSelected(item.branchIndex);
+                              }
+                            },
                           ),
                         )
                         .toList(),
@@ -501,7 +509,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                               selectedColor: Colors.blue,
                               onTap: () {
                                 Navigator.of(context).pop();
-                                _onBranchSelected(item.branchIndex);
+                                if (item.routePush != null) {
+                                  context.push(item.routePush!);
+                                } else {
+                                  _onBranchSelected(item.branchIndex);
+                                }
                               },
                             ),
                           )

@@ -4,7 +4,6 @@ import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/product_card.dart';
 import 'package:ezo/features/pos/widgets/common/cart_item_tile.dart';
 import 'package:ezo/features/pos/widgets/common/totals_display.dart';
-import 'package:ezo/features/pos/widgets/pos_layout_selector.dart';
 
 /// Restaurant layout — order type selector, large images, order notes.
 class RestaurantLayout extends BasePosLayout {

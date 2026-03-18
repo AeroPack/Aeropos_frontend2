@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/viewModel/product_view_model.dart';

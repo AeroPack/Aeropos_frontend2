@@ -114,13 +114,10 @@ class SyncService {
     if (_isSyncing) return;
     _isSyncing = true;
 
-    print('Starting auto-sync...');
     try {
       await push();
       await pull();
-      print('Auto-sync completed successfully.');
     } catch (e) {
-      print('Sync failed: $e');
     } finally {
       _isSyncing = false;
     }
@@ -188,7 +185,6 @@ class SyncService {
 
       return false;
     } catch (e) {
-      print('Error checking pending changes: $e');
       return false; // Assume no pending changes on error
     }
   }
@@ -232,7 +228,6 @@ class SyncService {
         invoices: pendingInvoices.length,
       );
     } catch (e) {
-      print('Error getting pending changes details: $e');
       return PendingChangesDetail(
         categories: 0,
         units: 0,
@@ -249,30 +244,22 @@ class SyncService {
   /// Clean all local data and perform a full sync from the API
   Future<bool> cleanAndSync() async {
     if (_isSyncing) {
-      print('Sync already in progress, cannot clean and sync');
       return false;
     }
 
     _isSyncing = true;
 
     try {
-      print('Starting clean and sync operation...');
 
       // Step 1: Clear all local data
-      print('Clearing all local data...');
       await db.clearAllData();
-      print('Local data cleared successfully');
 
       // Step 2: Pull all data from API (lastSyncTime will be null, forcing full sync)
-      print('Pulling all data from API...');
       await pull();
 
-      print('Clean and sync completed successfully!');
       return true;
     } catch (e) {
-      print('Clean and sync failed: $e');
       if (e is DioException) {
-        print('Response: ${e.response?.data}');
       }
       return false;
     } finally {
@@ -285,9 +272,6 @@ class SyncService {
       // Force full sync if database is empty
       final productCount = await (db.select(db.products)..limit(1)).get();
       if (productCount.isEmpty) {
-        print(
-          'Database is empty, clearing sync metadata and forcing full sync',
-        );
         // Clear the lastSyncTime to force a full sync
         await (db.delete(
           db.syncMetadata,
@@ -296,7 +280,6 @@ class SyncService {
 
       var lastSyncTime = await _getLastSyncTime();
 
-      print('Pulling updates since: $lastSyncTime');
 
       final response = await dio.post(
         'api/sync',
@@ -307,11 +290,9 @@ class SyncService {
         final responseData = response.data as Map<String, dynamic>;
         final updates = responseData['updates'] as Map<String, dynamic>?;
         if (updates != null) {
-          print('Pulled updates: ${updates.keys.join(', ')}');
           // Log specific table counts
           updates.forEach((key, value) {
             if (value is List) {
-              print('  $key: ${value.length} items');
             }
           });
           await _applyUpdates(updates);
@@ -319,9 +300,7 @@ class SyncService {
         await _updateLastSyncTime(DateTime.now());
       }
     } catch (e) {
-      print('Pull error: $e');
       if (e is DioException) {
-        print('  Response: ${e.response?.data}');
       }
     }
   }
@@ -330,7 +309,6 @@ class SyncService {
   /// Useful for initial loads or when you need to fetch all historical data
   Future<void> forcePull() async {
     try {
-      print('Force pulling all data (ignoring lastSyncTime)...');
 
       final response = await dio.post(
         'api/sync',
@@ -343,11 +321,9 @@ class SyncService {
         final responseData = response.data as Map<String, dynamic>;
         final updates = responseData['updates'] as Map<String, dynamic>?;
         if (updates != null) {
-          print('Force pulled updates: ${updates.keys.join(', ')}');
           // Log specific table counts
           updates.forEach((key, value) {
             if (value is List) {
-              print('  $key: ${value.length} items');
             }
           });
           await _applyUpdates(updates);
@@ -356,9 +332,7 @@ class SyncService {
         await _updateLastSyncTime(DateTime.now());
       }
     } catch (e) {
-      print('Force pull error: $e');
       if (e is DioException) {
-        print('  Response: ${e.response?.data}');
       }
       rethrow; // Re-throw to allow caller to handle
     }
@@ -660,7 +634,6 @@ class SyncService {
         }
       }
     } catch (e) {
-      print('Push error: $e');
       errors.add('Unexpected error during sync: $e');
     }
 
@@ -683,32 +656,21 @@ class SyncService {
       final response = await dio.post(endpoint, data: data);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await onSuccess();
-        print('✓ Synced: $entityDescription');
         return true;
       } else {
-        print(
-          '✗ Failed to sync $entityDescription: Status ${response.statusCode}',
-        );
         return false;
       }
     } catch (e) {
-      print('✗ Error syncing $entityDescription: $e');
       if (e is DioException) {
         if (e.response?.statusCode == 400) {
-          print('  400 Bad Request - Invalid data: ${e.response?.data}');
         } else if (e.response?.statusCode == 401) {
-          print('  401 Unauthorized - Authentication failed');
         } else if (e.response?.statusCode == 500) {
-          print('  500 Server Error - Backend issue');
         } else if (e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout) {
-          print('  Timeout - Network is slow or unavailable');
         } else if (e.type == DioExceptionType.connectionError) {
-          print('  Connection Error - No internet connection');
         }
         if (e.response?.data != null) {
-          print('  Response: ${e.response?.data}');
-        }
+          }
       }
       return false; // Return false instead of rethrowing
     }
@@ -717,12 +679,9 @@ class SyncService {
   /// Manually sync products from the server
   Future<bool> syncProducts() async {
     try {
-      print('Manually syncing products...');
       await pull();
-      print('Product sync completed successfully');
       return true;
     } catch (e) {
-      print('Product sync failed: $e');
       return false;
     }
   }
@@ -734,7 +693,6 @@ class SyncService {
       D Function(Map<String, dynamic>) fromJson,
     ) async {
       if (data != null && data is List) {
-        print('Syncing ${table.actualTableName}: ${data.length} items');
         for (var item in data) {
           try {
             final map = Map<String, dynamic>.from(item);
@@ -765,12 +723,7 @@ class SyncService {
           } catch (e) {
             // If it's a UNIQUE constraint error (like SKU or UUID conflict), log it but continue
             if (e.toString().contains('UNIQUE constraint failed')) {
-              print(
-                'Skipping record due to conflict in ${table.actualTableName}: $e',
-              );
             } else {
-              print('Error upserting into ${table.actualTableName}: $e');
-              print('Failing data: $item');
             }
           }
         }
@@ -800,7 +753,6 @@ class SyncService {
       if (record == null || record.value == null) return null;
       return DateTime.tryParse(record.value!);
     } catch (e) {
-      print('Error getting last sync time: $e');
       return null;
     }
   }
@@ -817,7 +769,6 @@ class SyncService {
             ),
           );
     } catch (e) {
-      print('Error updating last sync time: $e');
     }
   }
 }

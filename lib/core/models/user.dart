@@ -114,8 +114,9 @@ class User {
   bool get isEmployee => role == 'employee';
 
   bool hasPermission(String permission) {
-    if (isAdmin)
+    if (isAdmin) {
       return true; // Admin has all permissions implicitly (frontend safety)
+    }
     return permissions.contains(permission);
   }
 }

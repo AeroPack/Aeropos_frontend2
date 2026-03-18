@@ -23,9 +23,10 @@ import 'package:ezo/features/suppliers/supplier_list_screen.dart';
 import 'package:ezo/features/employees/employee_list_screen.dart';
 import 'package:ezo/features/pos/pos_screen.dart';
 import 'package:ezo/features/inventory/reports/invoice_settings_screen.dart';
-import 'package:ezo/features/invoice/screens/invoice_template_screen.dart';
+
 import 'package:ezo/features/invoice/screens/invoice_form_screen.dart';
 import 'package:ezo/features/invoice/screens/invoice_history_screen.dart';
+import 'package:ezo/features/invoice/invoice_template_editor/main.dart';
 import 'package:ezo/features/profile/presentation/screens/user_profile_screen.dart';
 import 'package:ezo/features/profile/presentation/screens/company_profile_screen.dart';
 import 'package:ezo/features/profile/presentation/screens/my_companies_screen.dart';
@@ -257,15 +258,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
 
-          // Index 11: Invoice Templates
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/invoice-templates',
-                builder: (context, state) => const InvoiceTemplateScreen(),
-              ),
-            ],
-          ),
           // Index 12: New Invoice
           StatefulShellBranch(
             routes: [
@@ -275,7 +267,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Index 14: User Profile
+          // Index 13: User Profile
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -288,7 +280,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Index 15: Company Profile
+          // Index 14: Company Profile
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -297,7 +289,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // Index 16: Employees
+          // Index 15: Employees
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -309,8 +301,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Full screen route for POS (outside AppShell)
       GoRoute(path: '/pos', builder: (context, state) => const PosScreen()),
+      
+      // Full screen route for Invoice Template Editor (outside AppShell)
+      GoRoute(
+        path: '/invoice-templates',
+        builder: (context, state) => const InvoiceTemplateEditorApp(),
+      ),
     ],
   );
 });

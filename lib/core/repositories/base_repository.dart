@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
-import '../models/enums/sync_status.dart';
 
 abstract class BaseRepository<
   T,

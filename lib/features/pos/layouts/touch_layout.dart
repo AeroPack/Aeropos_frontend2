@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/product_card.dart';
 import 'package:ezo/features/pos/widgets/common/category_chip.dart';
-import 'package:ezo/features/pos/widgets/pos_layout_selector.dart';
 
 /// Touch layout — extra large buttons, number pad, high contrast.
 /// Cart on the left (35%), products on right with big tiles.

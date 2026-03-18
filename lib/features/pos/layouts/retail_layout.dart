@@ -5,7 +5,6 @@ import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/product_card.dart';
 import 'package:ezo/features/pos/widgets/common/category_chip.dart';
 import 'package:ezo/features/pos/widgets/common/totals_display.dart';
-import 'package:ezo/features/pos/widgets/pos_layout_selector.dart';
 
 /// Retail layout — barcode input, 5-col minimal grid, receipt-style cart.
 class RetailLayout extends BasePosLayout {

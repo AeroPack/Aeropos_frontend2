@@ -8,10 +8,7 @@ import '../repositories/brand_repository.dart'; // Added
 import '../models/category.dart';
 import '../models/unit.dart';
 import '../models/brand.dart'; // Added
-import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart' as dio;
-import 'dart:convert';
-import 'dart:io';
 import '../../config/app_config.dart';
 import '../services/device_id_service.dart';
 
@@ -92,10 +89,7 @@ class ProductViewModel {
 
     try {
       await _database.insertProduct(entry);
-      print('Product added successfully');
-    } catch (e, s) {
-      print('Error adding product: $e');
-      print('Stack trace: $s');
+    } catch (e) {
       rethrow;
     }
   }
@@ -148,7 +142,6 @@ class ProductViewModel {
         return response.data['url'] as String;
       }
     } catch (e) {
-      print("Image upload failed: $e");
     }
     return null;
   }

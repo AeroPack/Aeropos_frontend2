@@ -120,7 +120,7 @@ class ThermalLayout {
                       pw.Expanded(
                         flex: 1,
                         child: pw.Text(
-                          "${item.quantity}",
+                          item.quantity.toString(),
                           style: TemplateHelper.getStyle(template: template),
                         ),
                       ),
@@ -135,7 +135,7 @@ class ThermalLayout {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
 
               pw.Divider(borderStyle: pw.BorderStyle.dashed),
               _thermalRow(

@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ezo/features/sales/state/cart_notifier.dart';
 import 'package:ezo/core/models/product.dart';
-import 'package:ezo/core/models/enums/sync_status.dart';
 
 void main() {
   group('Cart GST Calculations', () {

@@ -23,16 +23,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
       throw Exception('Not authenticated');
     }
 
-    print('Fetching profile from: $baseUrl/api/profile');
-    print('Token: ${token.substring(0, 20)}...');
 
     final response = await _client.get(
       Uri.parse('$baseUrl/api/profile'),
       headers: {'x-auth-token': token, 'Content-Type': 'application/json'},
     );
 
-    print('Profile response status: ${response.statusCode}');
-    print('Profile response body: ${response.body}');
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -86,8 +82,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
     // 1. Text Update (if data provided)
     if (data.isNotEmpty) {
-      print('Updating profile text data at: $baseUrl/api/profile');
-      print('Update data: $data');
 
       final response = await _client.put(
         Uri.parse('$baseUrl/api/profile'),
@@ -95,8 +89,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
         body: json.encode(data),
       );
 
-      print('Update response status: ${response.statusCode}');
-      print('Update response body: ${response.body}');
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to update profile data: ${response.body}');
@@ -105,8 +97,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
     // 2. Image Upload (if image provided)
     if (imageFile != null) {
-      print('Uploading image to: $baseUrl/api/profile/upload-image');
-      print('Image path: ${imageFile.path}');
 
       var request = http.MultipartRequest(
         'POST',
@@ -139,8 +129,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('Upload response status: ${response.statusCode}');
-      print('Upload response body: ${response.body}');
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to upload profile image: ${response.body}');

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
-import 'package:ezo/features/pos/state/pos_category_state.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/widgets/product_image.dart';
-import '../widgets/pos_layout_selector.dart';
 import 'base_pos_layout.dart';
 
 class CompactLayout extends BasePosLayout {
@@ -165,7 +162,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                           border: Border.all(color: Colors.grey.shade300),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 4,
                             ),
                           ],
@@ -784,7 +781,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF007AFF).withValues(alpha: 0.2),
+          color: const Color(0xFF007AFF).withOpacity(0.2),
         ),
       ),
       child: Column(
@@ -1092,37 +1089,6 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _actionButton(
-    String label,
-    IconData icon,
-    Color color, {
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 14, color: Colors.white),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _gridActionBtn(String label, IconData icon, {VoidCallback? onTap}) {
     return GestureDetector(

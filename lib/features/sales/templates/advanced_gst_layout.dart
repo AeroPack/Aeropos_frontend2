@@ -158,14 +158,14 @@ class AdvancedGstLayout {
               data: List.generate(invoice.items.length, (index) {
                 final item = invoice.items[index];
                 return [
-                  "${index + 1}",
+                  (index + 1).toString(),
                   item.productName ?? "",
                   "8517",
-                  "${item.quantity}",
+                  item.quantity.toString(),
                   item.unitPrice.toStringAsFixed(2),
                   "0.00",
                   item.totalPrice.toStringAsFixed(2),
-                  "${invoice.items[index].productName != null ? 'GST' : ''}", // Simple placeholder or better logic needed if possible
+                  (invoice.items[index].productName != null ? 'GST' : ''), // Simple placeholder or better logic needed if possible
                   item.totalPrice.toStringAsFixed(2),
                 ];
               }),

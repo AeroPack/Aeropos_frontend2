@@ -142,18 +142,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               email,
             }) async {
               final customer = await ServiceLocator.instance.customerViewModel
-                  .addCustomer(
-                    name: name,
-                    phone: phone,
-                    email: email,
-                    address: address,
-                    creditLimit: creditLimit,
-                  );
-              if (mounted) {
+                    .addCustomer(
+                      name: name,
+                      phone: phone,
+                      email: email,
+                      address: address,
+                      creditLimit: creditLimit,
+                    );
+                if (!context.mounted) return;
                 ref.read(cartProvider.notifier).setCustomer(customer);
                 PosToast.showSuccess(context, "Customer created and selected");
-              }
-            },
+              },
       ),
     );
   }
@@ -241,8 +240,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       PosLayoutType.dualScreen => "Dual Screen POS",
     };
 
-    final onSearch = (q) => ref.read(productSearchProvider.notifier).state = q;
-    final onBack = () => context.go('/dashboard');
+    onSearch(q) => ref.read(productSearchProvider.notifier).state = q;
+    void onBack() => context.go('/dashboard');
 
     return Scaffold(
       appBar: MasterHeader(
@@ -296,14 +295,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     void Function(String) onSearch,
     VoidCallback onBack,
   ) {
-    final onProductTap = (p) => cartNotifier.addProduct(p);
-    final onCategoryTap = (id) =>
+    void onProductTap(p) => cartNotifier.addProduct(p);
+    onCategoryTap(id) =>
         ref.read(selectedCategoryProvider.notifier).state = id;
-    final onCheckout = ({bool shouldSave = true}) =>
+    Future<void> onCheckout({bool shouldSave = true}) =>
         _handleCheckout(shouldSave: shouldSave);
-    final onSetOverallDiscount = (d, p) =>
+    void onSetOverallDiscount(d, p) =>
         cartNotifier.setOverallDiscount(d, p);
-    final onReset = () => cartNotifier.clearCart();
+    void onReset() => cartNotifier.clearCart();
 
     switch (type) {
       case PosLayoutType.compact:

@@ -34,7 +34,7 @@ class PosDataTable<T> extends StatelessWidget {
         border: Border.all(color: PosColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -92,8 +92,8 @@ class PosDataTable<T> extends StatelessWidget {
                  child: DataTable(
                    columns: columns,
                    rows: data.map((item) => rowBuilder(item)).toList(),
-                   headingRowColor: MaterialStateProperty.all(const Color(0xFFFAFAFA)),
-                   dataRowColor: MaterialStateProperty.all(Colors.white),
+                   headingRowColor: WidgetStateProperty.all(const Color(0xFFFAFAFA)),
+                   dataRowColor: WidgetStateProperty.all(Colors.white),
                    headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: PosColors.textMain),
                    dataTextStyle: const TextStyle(color: PosColors.textMain, fontSize: 13),
                    columnSpacing: 24,

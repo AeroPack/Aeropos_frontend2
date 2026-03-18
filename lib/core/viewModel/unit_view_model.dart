@@ -2,9 +2,6 @@ import 'package:drift/drift.dart' as drift;
 import 'package:ezo/core/database/app_database.dart';
 import '../services/sync_service.dart';
 import 'package:uuid/uuid.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../../config/app_config.dart';
 
 class UnitViewModel {
   final AppDatabase _database;

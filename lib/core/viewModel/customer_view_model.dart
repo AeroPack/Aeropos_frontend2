@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' as drift;
 import 'package:ezo/core/database/app_database.dart';
 import '../services/sync_service.dart';
 import '../repositories/customer_repository.dart';

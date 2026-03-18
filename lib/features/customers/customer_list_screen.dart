@@ -83,7 +83,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     border: Border.all(color: PosColors.border),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha: 0.02),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -123,7 +123,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
                                   return SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
-                                    child: Container(
+                                    child: SizedBox(
                                       width: tableWidth,
                                       child: Column(
                                         crossAxisAlignment:

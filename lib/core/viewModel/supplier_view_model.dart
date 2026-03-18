@@ -1,11 +1,7 @@
-import 'package:drift/drift.dart' as drift;
 import 'package:ezo/core/database/app_database.dart';
 import '../services/sync_service.dart';
 import '../repositories/supplier_repository.dart';
 import 'package:uuid/uuid.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../../config/app_config.dart';
 import '../../core/models/user.dart';
 import '../../core/models/enums/sync_status.dart';
 

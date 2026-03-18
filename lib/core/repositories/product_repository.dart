@@ -3,7 +3,6 @@ import '../database/app_database.dart';
 import '../models/product.dart';
 import '../models/enums/sync_status.dart';
 import '../di/service_locator.dart';
-import 'package:uuid/uuid.dart';
 
 class ProductRepository {
   final AppDatabase db;

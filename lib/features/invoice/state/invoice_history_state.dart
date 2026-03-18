@@ -99,7 +99,6 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
         totalItems: totalItems,
       );
     } catch (e) {
-      print('Error loading sales history: $e');
       state = state.copyWith(isLoading: false, hasMore: false);
     }
   }

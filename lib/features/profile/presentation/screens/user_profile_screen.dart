@@ -93,8 +93,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   void _loadProfileData(Map<String, dynamic>? profile) {
     if (profile == null || !mounted) return;
 
-    print('=== _loadProfileData called ===');
-    print('Profile data: $profile');
 
     // Update text controllers with profile data
     _nameController.text = profile['name'] ?? '';
@@ -128,10 +126,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       setState(() {});
     }
 
-    print('Text controllers updated successfully');
-    print('  Name: ${_nameController.text}');
-    print('  Email: ${_emailController.text}');
-    print('  Phone: ${_phoneController.text}');
   }
 
   Future<void> _saveProfile() async {
@@ -214,11 +208,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       });
     }
 
-    print('=== BUILD METHOD ===');
-    print('Profile state - isLoading: ${profileState.isLoading}');
-    print('Profile state - errorMessage: ${profileState.errorMessage}');
-    print('Profile state - profile: ${profileState.profile}');
-    print('Profile loaded flag: $_isProfileLoaded');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB), // Light grey background from UI

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
@@ -116,7 +116,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           excludeId: widget.product?.id,
         );
         if (!isSkuUnique) {
-          setState(() => _isLoading = false);
+          if (!context.mounted) return;
           PosToast.showError(
             context,
             "SKU already exists. Please use a unique SKU.",
@@ -132,7 +132,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         excludeId: widget.product?.id,
       );
       if (!isNameUnique) {
-        setState(() => _isLoading = false);
+        if (!context.mounted) return;
         PosToast.showError(
           context,
           "Product Color or Name already exists. Please use a unique name.",
@@ -205,7 +205,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 localPathToSave = savedImage.path;
               }
             } catch (e) {
-              print("Compression failed: $e");
               final savedImage = await File(
                 _selectedImageFile!.path,
               ).copy(targetPath);

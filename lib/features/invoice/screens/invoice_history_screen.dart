@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:ezo/core/layout/pos_design_system.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/di/service_locator.dart';
@@ -106,7 +105,6 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
                 customer: cust,
               );
             } catch (e) {
-              print('Error rendering invoice row: $e');
               return const SizedBox.shrink();
             }
           },

@@ -166,13 +166,10 @@ class AuthController extends StateNotifier<AuthState> {
       await _authRepository.switchCompany(companyId);
 
       // Clear local data and re-sync for the new company
-      print('Switching company, clearing local data...');
       final database = ServiceLocator.instance.database;
       await database.clearAllData();
 
-      print('Re-syncing data for new company...');
       await _syncService.pull();
-      print('Company switch sync completed');
 
       // Also fetch company info if not returned by getCurrentUser (or handle both)
       // For now, let's just re-run _completeLogin which does full refresh
@@ -195,7 +192,7 @@ class AuthController extends StateNotifier<AuthState> {
       final companies = await _authRepository.getMyCompanies();
       state = state.copyWith(companies: companies);
     } catch (e) {
-      print("Error refreshing companies: $e");
+      // Error refreshing companies
     }
   }
 
@@ -253,14 +250,12 @@ class AuthController extends StateNotifier<AuthState> {
         return;
       }
 
-      print('Google User: ${googleUser.email}');
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
 
       if (idToken == null && googleAuth.accessToken == null) {
-        print('Google Sign-In Error: Both ID Token and Access Token are null');
         throw Exception("Failed to retrieve Google Sign-In Tokens");
       }
 
@@ -345,9 +340,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   /// Complete login flow: sync data and load user
   Future<void> _completeLogin() async {
-    print('Login successful, syncing data...');
     await _syncService.pull();
-    print('Data sync completed');
 
     final response = await ServiceLocator.instance.authRemoteDataSource.getCurrentUser();
     final user = User.fromJson(response['employee'] ?? response);

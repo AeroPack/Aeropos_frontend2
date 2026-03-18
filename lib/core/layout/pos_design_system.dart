@@ -150,7 +150,7 @@ class PosDropdown<T> extends StatelessWidget {
       isRequired: isRequired,
       extraAction: extraLabelWidget,
       child: DropdownButtonFormField<T>(
-        value: value,
+        initialValue: value,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: PosColors.textLight, fontSize: 14),
