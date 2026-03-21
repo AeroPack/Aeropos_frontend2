@@ -178,7 +178,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
       actions:
           actions ??
           [
-            if (customActions != null) ...customActions!,
+            ...?customActions,
             if (isSmallDesktop) ...[
               const CompanySwitcher(),
               const SizedBox(width: 8),

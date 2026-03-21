@@ -37,6 +37,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
   final GlobalKey _sidebarKey = GlobalKey(debugLabel: 'billing_sidebar');
   double _sidebarWidth = 420;
   bool _isBillingOnLeft = false;
+  String? _selectedPaymentMethod;
   static const double _minSidebarWidth = 320;
   static const double _maxSidebarWidthRatio = 0.6;
   static const double _dragHandleWidth = 6.0;
@@ -62,59 +63,84 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
       if (next.items.isEmpty &&
           (previous != null && previous.items.isNotEmpty)) {
         _discountRateController.text = "0";
+        // Reset payment method when cart is cleared
+        setState(() {
+          _selectedPaymentMethod = null;
+        });
       }
     });
 
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 900;
-    final productAreaWidth = isMobile ? width : width - _sidebarWidth - _dragHandleWidth;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!isMobile && _isBillingOnLeft) ...[
-            _billingSidebar(),
-            _dragHandle(width, true),
-          ],
-          
-          // --- PRODUCTS & CATEGORIES ---
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Categories",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildCategoryList(),
-                _buildProductGridHeader(width),
-                Expanded(child: _buildProductGrid(productAreaWidth)),
-                if (isMobile)
-                  const SizedBox(height: 80), // Space for bottom bar
-              ],
-            ),
-          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final double totalWidth = constraints.maxWidth;
+          // True mobile: < 600px. Tablet/desktop: >= 600px
+          final bool isMobile = totalWidth < 600;
+          final double productAreaWidth = isMobile
+              ? totalWidth
+              : totalWidth - _sidebarWidth - _dragHandleWidth;
 
-          if (!isMobile && !_isBillingOnLeft) ...[
-            _dragHandle(width, false),
-            _billingSidebar(),
-          ],
-        ],
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!isMobile && _isBillingOnLeft) ...[
+                _billingSidebar(),
+                _dragHandle(totalWidth, true),
+              ],
+
+              // --- PRODUCTS & CATEGORIES ---
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: isMobile ? 4 : 8),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        isMobile ? 12 : 24,
+                        isMobile ? 8 : 16,
+                        isMobile ? 12 : 24,
+                        isMobile ? 4 : 8,
+                      ),
+                      child: const Row(
+                        children: [
+                          Text(
+                            "Categories",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildCategoryList(isMobile),
+                    _buildProductGridHeader(productAreaWidth, isMobile),
+                    Expanded(
+                      child: _buildProductGrid(productAreaWidth, isMobile),
+                    ),
+                    if (isMobile) const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+
+              if (!isMobile && !_isBillingOnLeft) ...[
+                _dragHandle(totalWidth, false),
+                _billingSidebar(),
+              ],
+            ],
+          );
+        },
       ),
-      bottomNavigationBar: isMobile
-          ? _buildMobileBottomBar(widget.cartState)
-          : null,
+      bottomNavigationBar: LayoutBuilder(
+        builder: (context, constraints) {
+          // Must recompute isMobile for bottom nav independently
+          final double w = MediaQuery.of(context).size.width;
+          return w < 600
+              ? _buildMobileBottomBar(widget.cartState)
+              : const SizedBox.shrink();
+        },
+      ),
     );
   }
 
@@ -141,44 +167,45 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-                  // The drag line indicator
-                  Container(
-                    width: 2,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-                  // The switch sides button
-                  Positioned(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isBillingOnLeft = !_isBillingOnLeft),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade300),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.swap_horiz,
-                          size: 16,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              // The drag line indicator
+              Container(
+                width: 2,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(1),
+                ),
               ),
-            ),
+              // The switch sides button
+              Positioned(
+                child: GestureDetector(
+                  onTap: () =>
+                      setState(() => _isBillingOnLeft = !_isBillingOnLeft),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.grey.shade300),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.swap_horiz,
+                      size: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
     );
   }
 
@@ -190,7 +217,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
           ),
         ],
@@ -199,15 +226,17 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  // Removed _buildTopToolbar as it's now provided by PosScreen's Scaffold appBar
+  Widget _buildCategoryList(bool isMobile) {
+    final double listHeight = isMobile ? 70 : 100;
+    final double itemWidth = isMobile ? 80 : 100;
+    final double hPad = isMobile ? 12 : 24;
 
-  Widget _buildCategoryList() {
     return widget.categories.when(
       data: (categories) => SizedBox(
-        height: 100,
+        height: listHeight,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: hPad),
           itemCount: categories.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
@@ -217,6 +246,8 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                 icon: Icons.grid_view,
                 isActive: widget.selectedCategoryId == null,
                 onTap: () => widget.onCategoryTap(null),
+                width: itemWidth,
+                isMobile: isMobile,
               );
             }
             final category = categories[index - 1];
@@ -226,11 +257,16 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
               icon: Icons.category_outlined,
               isActive: widget.selectedCategoryId == category.id,
               onTap: () => widget.onCategoryTap(category.id),
+              width: itemWidth,
+              isMobile: isMobile,
             );
           },
         ),
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const SizedBox(
+        height: 70,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
       error: (err, stack) => Center(child: Text("Error: $err")),
     );
   }
@@ -241,15 +277,17 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     required IconData icon,
     required bool isActive,
     required VoidCallback onTap,
+    double width = 100,
+    bool isMobile = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 12),
+        width: width,
+        margin: EdgeInsets.only(right: isMobile ? 8 : 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(isMobile ? 8 : 12),
           border: Border.all(
             color: isActive ? Colors.orange : Colors.transparent,
             width: 2,
@@ -276,35 +314,43 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _buildProductGridHeader(double screenWidth) {
+  Widget _buildProductGridHeader(double availableWidth, bool isMobile) {
+    final double hPad = isMobile ? 12 : 24;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 12,
-        runSpacing: 12,
+      padding: EdgeInsets.fromLTRB(
+        hPad,
+        isMobile ? 8 : 16,
+        hPad,
+        isMobile ? 8 : 12,
+      ),
+      child: Row(
         children: [
-          const Text(
+          Text(
             "Products",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: isMobile ? 15 : 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          SizedBox(
-            width: screenWidth < 600 ? double.infinity : 200,
-            height: 36,
-            child: TextField(
-              controller: _searchController,
-              onChanged: widget.onSearch,
-              decoration: InputDecoration(
-                hintText: "Search",
-                prefixIcon: const Icon(Icons.search, size: 18),
-                contentPadding: EdgeInsets.zero,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                onChanged: widget.onSearch,
+                decoration: InputDecoration(
+                  hintText: "Search products...",
+                  hintStyle: const TextStyle(fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
                 ),
-                filled: true,
-                fillColor: Colors.white,
               ),
             ),
           ),
@@ -313,19 +359,31 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _buildProductGrid(double availableWidth) {
+  Widget _buildProductGrid(double availableWidth, bool isMobile) {
+    final double hPad = isMobile ? 12 : 24;
+    final double spacing = isMobile ? 12 : 24;
+    // Determine columns: at least 2, fit as many ~120-150px wide cards as possible
+    final int minCardWidth = isMobile ? 130 : 150;
+    int crossAxisCount = (availableWidth / minCardWidth).floor();
+    if (crossAxisCount < 2) crossAxisCount = 2;
+
     return widget.products.when(
       data: (productList) {
-        int crossAxisCount = (availableWidth / 150).floor();
-        if (crossAxisCount < 2) crossAxisCount = 2; // Minimum columns
-
+        if (productList.isEmpty) {
+          return const Center(
+            child: Text(
+              "No products found",
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
+        }
         return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.fromLTRB(hPad, 0, hPad, hPad),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            childAspectRatio: 0.8,
-            crossAxisSpacing: 24,
-            mainAxisSpacing: 24,
+            childAspectRatio: isMobile ? 0.75 : 0.8,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
           ),
           itemCount: productList.length,
           itemBuilder: (context, index) {
@@ -362,7 +420,14 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                   },
                 ),
         ),
-        _buildSummarySection(widget.cartState),
+        const Divider(height: 1),
+        // Summary section is scrollable so it never overflows on small screens
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 460),
+          child: SingleChildScrollView(
+            child: _buildSummarySection(widget.cartState),
+          ),
+        ),
       ],
     );
   }
@@ -404,11 +469,11 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                     },
                     icon: const Icon(
                       Icons.close,
-                      size: 16,
+                      size: 20,
                       color: Color(0xFF166534),
                     ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(4),
+                    splashRadius: 20,
                   ),
                 ],
               ),
@@ -651,6 +716,53 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
               ),
             ],
           ),
+
+          // Payment Method Section
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Payment Method",
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+              if (_selectedPaymentMethod != null)
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _selectedPaymentMethod = null),
+                  child: const Text(
+                    "Clear",
+                    style: TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildPaymentOption(
+                icon: Icons.attach_money,
+                label: "Cash",
+                isSelected: _selectedPaymentMethod == "cash",
+                onTap: () => setState(() => _selectedPaymentMethod = "cash"),
+              ),
+              const SizedBox(width: 12),
+              _buildPaymentOption(
+                icon: Icons.credit_card,
+                label: "Debit Card",
+                isSelected: _selectedPaymentMethod == "card",
+                onTap: () => setState(() => _selectedPaymentMethod = "card"),
+              ),
+              const SizedBox(width: 12),
+              _buildPaymentOption(
+                icon: Icons.qr_code_scanner,
+                label: "Scan",
+                isSelected: _selectedPaymentMethod == "scan",
+                onTap: () => setState(() => _selectedPaymentMethod = "scan"),
+              ),
+            ],
+          ),
+
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Divider(),
@@ -682,9 +794,13 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: cartState.items.isEmpty
+              onPressed:
+                  cartState.items.isEmpty || _selectedPaymentMethod == null
                   ? null
-                  : () => widget.onCheckout(shouldSave: true),
+                  : () => widget.onCheckout(
+                      shouldSave: true,
+                      paymentMethod: _selectedPaymentMethod,
+                    ),
               child: const Text(
                 "Checkout",
                 style: TextStyle(
@@ -709,14 +825,20 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                 Icons.print,
                 onTap: cartState.items.isEmpty
                     ? null
-                    : () => widget.onCheckout(shouldSave: false),
+                    : () => widget.onCheckout(
+                        shouldSave: false,
+                        paymentMethod: _selectedPaymentMethod,
+                      ),
               ),
               _gridActionBtn(
                 "Invoice",
                 Icons.receipt_outlined,
                 onTap: cartState.items.isEmpty
                     ? null
-                    : () => widget.onCheckout(shouldSave: false),
+                    : () => widget.onCheckout(
+                        shouldSave: false,
+                        paymentMethod: _selectedPaymentMethod,
+                      ),
               ),
               _gridActionBtn(
                 "Settings",
@@ -733,6 +855,56 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF007AFF).withValues(alpha: 0.1)
+                : Colors.grey.shade50,
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF007AFF)
+                  : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected
+                    ? const Color(0xFF007AFF)
+                    : Colors.grey.shade600,
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? const Color(0xFF007AFF)
+                      : Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -781,7 +953,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF007AFF).withOpacity(0.2),
+          color: const Color(0xFF007AFF).withValues(alpha: 0.2),
         ),
       ),
       child: Column(
@@ -1088,7 +1260,6 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
       ),
     );
   }
-
 
   Widget _gridActionBtn(String label, IconData icon, {VoidCallback? onTap}) {
     return GestureDetector(

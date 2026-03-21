@@ -12,6 +12,7 @@ class Invoices extends Table {
   RealColumn get tax => real()();
   RealColumn get discount => real().withDefault(const Constant(0.0))();
   RealColumn get total => real()();
+  TextColumn get paymentMethod => text().nullable()(); // e.g. 'cash', 'card', 'upi'
   TextColumn get signUrl => text().nullable()();
 
   IntColumn get tenantId => integer()();

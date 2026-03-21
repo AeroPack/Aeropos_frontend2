@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? impl.connect());
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration {
@@ -144,6 +144,73 @@ class AppDatabase extends _$AppDatabase {
             employees,
             'google_auth',
             employees.googleAuth,
+          );
+        }
+
+        if (from < 28) {
+          // Add all missing invoice settings enhancements
+          final cols = [
+            'tenant_id',
+            'custom_config',
+            'updated_at',
+            'footer_message',
+            'accent_color',
+            'font_family',
+            'font_size_multiplier',
+            'logo_path',
+            'thermal_width',
+            'show_logo',
+            'show_tax_breakdown',
+            'show_address',
+            'show_customer_details',
+            'show_footer',
+          ];
+
+          for (final colName in cols) {
+            GeneratedColumn? col;
+            if (colName == 'tenant_id') col = invoiceSettings.tenantId;
+            if (colName == 'custom_config') col = invoiceSettings.customConfig;
+            if (colName == 'updated_at') col = invoiceSettings.updatedAt;
+            if (colName == 'footer_message') col = invoiceSettings.footerMessage;
+            if (colName == 'accent_color') col = invoiceSettings.accentColor;
+            if (colName == 'font_family') col = invoiceSettings.fontFamily;
+            if (colName == 'font_size_multiplier')
+              col = invoiceSettings.fontSizeMultiplier;
+            if (colName == 'logo_path') col = invoiceSettings.logoPath;
+            if (colName == 'thermal_width') col = invoiceSettings.thermalWidth;
+            if (colName == 'show_logo') col = invoiceSettings.showLogo;
+            if (colName == 'show_tax_breakdown')
+              col = invoiceSettings.showTaxBreakdown;
+            if (colName == 'show_address') col = invoiceSettings.showAddress;
+            if (colName == 'show_customer_details')
+              col = invoiceSettings.showCustomerDetails;
+            if (colName == 'show_footer') col = invoiceSettings.showFooter;
+
+            if (col != null) {
+              await _safeAddColumn(m, invoiceSettings, colName, col);
+            }
+          }
+
+          // Data Fix: Update any existing NULL values to defaults to avoid Null-check crashes
+          await customStatement('UPDATE "invoice_settings" SET "accent_color" = \'#2A2D64\' WHERE "accent_color" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "font_family" = \'Roboto\' WHERE "font_family" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "font_size_multiplier" = 1.0 WHERE "font_size_multiplier" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "thermal_width" = 80 WHERE "thermal_width" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "show_logo" = 1 WHERE "show_logo" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "show_tax_breakdown" = 1 WHERE "show_tax_breakdown" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "show_address" = 1 WHERE "show_address" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "show_customer_details" = 1 WHERE "show_customer_details" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "show_footer" = 1 WHERE "show_footer" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "footer_message" = \'\' WHERE "footer_message" IS NULL');
+          await customStatement('UPDATE "invoice_settings" SET "updated_at" = CURRENT_TIMESTAMP WHERE "updated_at" IS NULL');
+        }
+        if (from < 29) {
+          // Add payment_method column to invoices table
+          await _safeAddColumn(
+            m,
+            invoices,
+            'payment_method',
+            invoices.paymentMethod as GeneratedColumn<Object>,
           );
         }
       },
@@ -351,6 +418,11 @@ class AppDatabase extends _$AppDatabase {
   // Invoice Settings CRUD
   Future<InvoiceSettingEntity?> getInvoiceSettings() =>
       select(invoiceSettings).getSingleOrNull();
+
+  Future<InvoiceSettingEntity?> getInvoiceSettingsForTenant(int tenantId) =>
+      (select(invoiceSettings)..where((t) => t.tenantId.equals(tenantId)))
+          .getSingleOrNull();
+
   Future<int> upsertInvoiceSettings(InvoiceSettingsCompanion entry) =>
       into(invoiceSettings).insertOnConflictUpdate(entry);
 

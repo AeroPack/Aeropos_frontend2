@@ -13,15 +13,16 @@ import 'package:ezo/features/pos/layouts/dual_screen_layout.dart';
 import 'package:ezo/features/pos/widgets/pos_layout_selector.dart';
 import 'package:ezo/core/database/app_database.dart';
 import '../../core/models/sale.dart';
-import '../../core/models/invoice_template.dart';
-import '../../core/services/invoice_service.dart';
-import '../inventory/reports/invoice_settings_screen.dart';
 import '../../core/widgets/pos_toast.dart';
 import '../../core/widgets/customer_form_dialog.dart';
 import '../../core/di/service_locator.dart';
 import '../../core/exceptions/sale_validation_exception.dart';
 import '../sales/screens/invoice_preview_screen.dart';
 import '../../core/widgets/master_header.dart';
+import 'package:ezo/features/invoice/invoice_template_editor/main.dart';
+import 'package:ezo/features/invoice/invoice_template_editor/template_repository.dart';
+import 'package:ezo/features/invoice/invoice_template_editor/models.dart' as editor_models;
+import 'package:ezo/core/providers/tenant_provider.dart';
 
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
@@ -38,7 +39,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     ServiceLocator.instance.syncService.pull();
   }
 
-  Future<void> _handleCheckout({bool shouldSave = true}) async {
+  Future<void> _handleCheckout({
+    bool shouldSave = true,
+    String? paymentMethod,
+  }) async {
     final cartState = ref.read(cartProvider);
     if (cartState.items.isEmpty) return;
 
@@ -63,6 +67,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       subtotal: cartState.subtotal,
       tax: cartState.taxAmount,
       discount: cartState.totalDiscount,
+      paymentMethod: paymentMethod, // Add the payment method here
       createdAt: DateTime.now(),
     );
 
@@ -70,7 +75,37 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (shouldSave) {
         await ServiceLocator.instance.saleRepository.createSale(sale);
       }
-      final template = ref.read(invoiceTemplateProvider);
+
+      final repo = ref.read(invoiceTemplateRepositoryProvider);
+      final tenantId = ref.read(tenantIdProvider);
+      
+      // Fetch hydrated template with company details and stored customizations
+      final invoiceData = await repo.getHydratedInvoiceData(tenantId, null);
+      
+      // Update with sale specific data
+      if (cartState.selectedCustomer != null) {
+        invoiceData.clientName = cartState.selectedCustomer!.name;
+        invoiceData.clientAddress = cartState.selectedCustomer!.address ?? '';
+        // Always show client details if a customer is selected
+        invoiceData.showClientContact = true;
+      } else {
+        invoiceData.clientName = 'Walk-in Customer';
+        invoiceData.clientAddress = '';
+        invoiceData.showClientContact = false;
+      }
+
+      invoiceData.paymentMethod = paymentMethod;
+
+      invoiceData.items = sale.items.map((item) => editor_models.InvoiceItem(
+        id: item.uuid,
+        desc: item.product.name,
+        details: '', // SaleItem doesn't have detailed description usually
+        qty: item.quantity.toDouble(),
+        rate: item.unitPrice,
+      )).toList();
+      
+      // Use the active template to generate the PDF
+      final activeTemplate = await repo.getSelectedTemplate(tenantId);
 
       if (!mounted) return;
       showDialog(
@@ -80,7 +115,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         builder: (context) => InvoicePreviewScreen(
           invoiceNumber: sale.invoiceNumber,
           onLayout: (format) async {
-            final pdf = await InvoiceService().generateInvoice(sale, template);
+            final pdf = activeTemplate.buildPdf(invoiceData);
             return pdf.save();
           },
           onPrintComplete: () {
@@ -123,7 +158,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void _openInvoiceSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const InvoiceSettingsScreen()),
+      MaterialPageRoute(builder: (context) => const InvoiceTemplateEditorApp()),
     );
   }
 
@@ -298,8 +333,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     void onProductTap(p) => cartNotifier.addProduct(p);
     onCategoryTap(id) =>
         ref.read(selectedCategoryProvider.notifier).state = id;
-    Future<void> onCheckout({bool shouldSave = true}) =>
-        _handleCheckout(shouldSave: shouldSave);
+    
+    Future<void> onCheckout({
+      required bool shouldSave,
+      String? paymentMethod,
+    }) =>
+        _handleCheckout(shouldSave: shouldSave, paymentMethod: paymentMethod);
+
     void onSetOverallDiscount(d, p) =>
         cartNotifier.setOverallDiscount(d, p);
     void onReset() => cartNotifier.clearCart();

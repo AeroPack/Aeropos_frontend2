@@ -9,12 +9,16 @@ class CartItem {
   final int quantity;
   final double manualDiscount; // The value (either Rs or %)
   final bool isPercentDiscount;
+  final List<String>? modifiers;
+  final String? course;
 
   const CartItem({
     required this.product,
     this.quantity = 1,
     this.manualDiscount = 0.0,
     this.isPercentDiscount = false,
+    this.modifiers,
+    this.course,
   });
 
   double get taxRate {
@@ -61,12 +65,16 @@ class CartItem {
     int? quantity,
     double? manualDiscount,
     bool? isPercentDiscount,
+    List<String>? modifiers,
+    String? course,
   }) {
     return CartItem(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
       manualDiscount: manualDiscount ?? this.manualDiscount,
       isPercentDiscount: isPercentDiscount ?? this.isPercentDiscount,
+      modifiers: modifiers ?? this.modifiers,
+      course: course ?? this.course,
     );
   }
 }
@@ -129,9 +137,23 @@ class CartState {
 class CartNotifier extends StateNotifier<CartState> {
   CartNotifier() : super(const CartState());
 
-  void addProduct(ProductEntity product) {
+  bool _compareModifiers(List<String>? a, List<String>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    final sortedA = List<String>.from(a)..sort();
+    final sortedB = List<String>.from(b)..sort();
+    for (int i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] != sortedB[i]) return false;
+    }
+    return true;
+  }
+
+  void addProduct(ProductEntity product, {List<String>? modifiers, String? course}) {
     final existingIndex = state.items.indexWhere(
-      (i) => i.product.id == product.id,
+      (i) => i.product.id == product.id && 
+             _compareModifiers(i.modifiers, modifiers) &&
+             i.course == course,
     );
 
     if (existingIndex >= 0) {
@@ -158,25 +180,35 @@ class CartNotifier extends StateNotifier<CartState> {
             product: product,
             manualDiscount: validDiscount,
             isPercentDiscount: product.isPercentDiscount,
+            modifiers: modifiers,
+            course: course,
           ),
         ],
       );
     }
   }
 
-  void removeProduct(ProductEntity product) {
+  void removeProduct(ProductEntity product, {List<String>? modifiers, String? course}) {
     state = state.copyWith(
-      items: state.items.where((i) => i.product.id != product.id).toList(),
+      items: state.items.where((i) => 
+        i.product.id != product.id || 
+        !_compareModifiers(i.modifiers, modifiers) ||
+        i.course != course
+      ).toList(),
     );
   }
 
-  void updateQuantity(ProductEntity product, int quantity) {
+  void updateQuantity(ProductEntity product, int quantity, {List<String>? modifiers, String? course}) {
     if (quantity <= 0) {
-      removeProduct(product);
+      removeProduct(product, modifiers: modifiers, course: course);
       return;
     }
 
-    final index = state.items.indexWhere((i) => i.product.id == product.id);
+    final index = state.items.indexWhere((i) => 
+      i.product.id == product.id && 
+      _compareModifiers(i.modifiers, modifiers) &&
+      i.course == course
+    );
     if (index >= 0) {
       final newItems = List<CartItem>.from(state.items);
       newItems[index] = newItems[index].copyWith(quantity: quantity);

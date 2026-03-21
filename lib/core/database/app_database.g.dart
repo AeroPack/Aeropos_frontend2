@@ -5553,12 +5553,10 @@ class $InvoiceSettingsTable extends InvoiceSettings
     'footer_message',
     aliasedName,
     false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 1000,
-    ),
+    additionalChecks: GeneratedColumn.checkTextLength(maxTextLength: 1000),
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _accentColorMeta = const VerificationMeta(
     'accentColor',
@@ -5604,6 +5602,59 @@ class $InvoiceSettingsTable extends InvoiceSettings
         requiredDuringInsert: false,
         defaultValue: const Constant(1.0),
       );
+  static const VerificationMeta _logoPathMeta = const VerificationMeta(
+    'logoPath',
+  );
+  @override
+  late final GeneratedColumn<String> logoPath = GeneratedColumn<String>(
+    'logo_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _thermalWidthMeta = const VerificationMeta(
+    'thermalWidth',
+  );
+  @override
+  late final GeneratedColumn<int> thermalWidth = GeneratedColumn<int>(
+    'thermal_width',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(80),
+  );
+  static const VerificationMeta _showLogoMeta = const VerificationMeta(
+    'showLogo',
+  );
+  @override
+  late final GeneratedColumn<bool> showLogo = GeneratedColumn<bool>(
+    'show_logo',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_logo" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _showTaxBreakdownMeta = const VerificationMeta(
+    'showTaxBreakdown',
+  );
+  @override
+  late final GeneratedColumn<bool> showTaxBreakdown = GeneratedColumn<bool>(
+    'show_tax_breakdown',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_tax_breakdown" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _showAddressMeta = const VerificationMeta(
     'showAddress',
   );
@@ -5648,6 +5699,17 @@ class $InvoiceSettingsTable extends InvoiceSettings
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _tenantIdMeta = const VerificationMeta(
+    'tenantId',
+  );
+  @override
+  late final GeneratedColumn<int> tenantId = GeneratedColumn<int>(
+    'tenant_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _customConfigMeta = const VerificationMeta(
     'customConfig',
   );
@@ -5679,9 +5741,14 @@ class $InvoiceSettingsTable extends InvoiceSettings
     accentColor,
     fontFamily,
     fontSizeMultiplier,
+    logoPath,
+    thermalWidth,
+    showLogo,
+    showTaxBreakdown,
     showAddress,
     showCustomerDetails,
     showFooter,
+    tenantId,
     customConfig,
     updatedAt,
   ];
@@ -5716,8 +5783,6 @@ class $InvoiceSettingsTable extends InvoiceSettings
           _footerMessageMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_footerMessageMeta);
     }
     if (data.containsKey('accent_color')) {
       context.handle(
@@ -5743,6 +5808,36 @@ class $InvoiceSettingsTable extends InvoiceSettings
         ),
       );
     }
+    if (data.containsKey('logo_path')) {
+      context.handle(
+        _logoPathMeta,
+        logoPath.isAcceptableOrUnknown(data['logo_path']!, _logoPathMeta),
+      );
+    }
+    if (data.containsKey('thermal_width')) {
+      context.handle(
+        _thermalWidthMeta,
+        thermalWidth.isAcceptableOrUnknown(
+          data['thermal_width']!,
+          _thermalWidthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('show_logo')) {
+      context.handle(
+        _showLogoMeta,
+        showLogo.isAcceptableOrUnknown(data['show_logo']!, _showLogoMeta),
+      );
+    }
+    if (data.containsKey('show_tax_breakdown')) {
+      context.handle(
+        _showTaxBreakdownMeta,
+        showTaxBreakdown.isAcceptableOrUnknown(
+          data['show_tax_breakdown']!,
+          _showTaxBreakdownMeta,
+        ),
+      );
+    }
     if (data.containsKey('show_address')) {
       context.handle(
         _showAddressMeta,
@@ -5765,6 +5860,12 @@ class $InvoiceSettingsTable extends InvoiceSettings
       context.handle(
         _showFooterMeta,
         showFooter.isAcceptableOrUnknown(data['show_footer']!, _showFooterMeta),
+      );
+    }
+    if (data.containsKey('tenant_id')) {
+      context.handle(
+        _tenantIdMeta,
+        tenantId.isAcceptableOrUnknown(data['tenant_id']!, _tenantIdMeta),
       );
     }
     if (data.containsKey('custom_config')) {
@@ -5815,6 +5916,22 @@ class $InvoiceSettingsTable extends InvoiceSettings
         DriftSqlType.double,
         data['${effectivePrefix}font_size_multiplier'],
       )!,
+      logoPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logo_path'],
+      ),
+      thermalWidth: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}thermal_width'],
+      )!,
+      showLogo: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_logo'],
+      )!,
+      showTaxBreakdown: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_tax_breakdown'],
+      )!,
       showAddress: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}show_address'],
@@ -5827,6 +5944,10 @@ class $InvoiceSettingsTable extends InvoiceSettings
         DriftSqlType.bool,
         data['${effectivePrefix}show_footer'],
       )!,
+      tenantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tenant_id'],
+      ),
       customConfig: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}custom_config'],
@@ -5852,9 +5973,14 @@ class InvoiceSettingEntity extends DataClass
   final String accentColor;
   final String fontFamily;
   final double fontSizeMultiplier;
+  final String? logoPath;
+  final int thermalWidth;
+  final bool showLogo;
+  final bool showTaxBreakdown;
   final bool showAddress;
   final bool showCustomerDetails;
   final bool showFooter;
+  final int? tenantId;
   final String? customConfig;
   final DateTime updatedAt;
   const InvoiceSettingEntity({
@@ -5864,9 +5990,14 @@ class InvoiceSettingEntity extends DataClass
     required this.accentColor,
     required this.fontFamily,
     required this.fontSizeMultiplier,
+    this.logoPath,
+    required this.thermalWidth,
+    required this.showLogo,
+    required this.showTaxBreakdown,
     required this.showAddress,
     required this.showCustomerDetails,
     required this.showFooter,
+    this.tenantId,
     this.customConfig,
     required this.updatedAt,
   });
@@ -5879,9 +6010,18 @@ class InvoiceSettingEntity extends DataClass
     map['accent_color'] = Variable<String>(accentColor);
     map['font_family'] = Variable<String>(fontFamily);
     map['font_size_multiplier'] = Variable<double>(fontSizeMultiplier);
+    if (!nullToAbsent || logoPath != null) {
+      map['logo_path'] = Variable<String>(logoPath);
+    }
+    map['thermal_width'] = Variable<int>(thermalWidth);
+    map['show_logo'] = Variable<bool>(showLogo);
+    map['show_tax_breakdown'] = Variable<bool>(showTaxBreakdown);
     map['show_address'] = Variable<bool>(showAddress);
     map['show_customer_details'] = Variable<bool>(showCustomerDetails);
     map['show_footer'] = Variable<bool>(showFooter);
+    if (!nullToAbsent || tenantId != null) {
+      map['tenant_id'] = Variable<int>(tenantId);
+    }
     if (!nullToAbsent || customConfig != null) {
       map['custom_config'] = Variable<String>(customConfig);
     }
@@ -5897,9 +6037,18 @@ class InvoiceSettingEntity extends DataClass
       accentColor: Value(accentColor),
       fontFamily: Value(fontFamily),
       fontSizeMultiplier: Value(fontSizeMultiplier),
+      logoPath: logoPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(logoPath),
+      thermalWidth: Value(thermalWidth),
+      showLogo: Value(showLogo),
+      showTaxBreakdown: Value(showTaxBreakdown),
       showAddress: Value(showAddress),
       showCustomerDetails: Value(showCustomerDetails),
       showFooter: Value(showFooter),
+      tenantId: tenantId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tenantId),
       customConfig: customConfig == null && nullToAbsent
           ? const Value.absent()
           : Value(customConfig),
@@ -5921,11 +6070,16 @@ class InvoiceSettingEntity extends DataClass
       fontSizeMultiplier: serializer.fromJson<double>(
         json['fontSizeMultiplier'],
       ),
+      logoPath: serializer.fromJson<String?>(json['logoPath']),
+      thermalWidth: serializer.fromJson<int>(json['thermalWidth']),
+      showLogo: serializer.fromJson<bool>(json['showLogo']),
+      showTaxBreakdown: serializer.fromJson<bool>(json['showTaxBreakdown']),
       showAddress: serializer.fromJson<bool>(json['showAddress']),
       showCustomerDetails: serializer.fromJson<bool>(
         json['showCustomerDetails'],
       ),
       showFooter: serializer.fromJson<bool>(json['showFooter']),
+      tenantId: serializer.fromJson<int?>(json['tenantId']),
       customConfig: serializer.fromJson<String?>(json['customConfig']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -5940,9 +6094,14 @@ class InvoiceSettingEntity extends DataClass
       'accentColor': serializer.toJson<String>(accentColor),
       'fontFamily': serializer.toJson<String>(fontFamily),
       'fontSizeMultiplier': serializer.toJson<double>(fontSizeMultiplier),
+      'logoPath': serializer.toJson<String?>(logoPath),
+      'thermalWidth': serializer.toJson<int>(thermalWidth),
+      'showLogo': serializer.toJson<bool>(showLogo),
+      'showTaxBreakdown': serializer.toJson<bool>(showTaxBreakdown),
       'showAddress': serializer.toJson<bool>(showAddress),
       'showCustomerDetails': serializer.toJson<bool>(showCustomerDetails),
       'showFooter': serializer.toJson<bool>(showFooter),
+      'tenantId': serializer.toJson<int?>(tenantId),
       'customConfig': serializer.toJson<String?>(customConfig),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -5955,9 +6114,14 @@ class InvoiceSettingEntity extends DataClass
     String? accentColor,
     String? fontFamily,
     double? fontSizeMultiplier,
+    Value<String?> logoPath = const Value.absent(),
+    int? thermalWidth,
+    bool? showLogo,
+    bool? showTaxBreakdown,
     bool? showAddress,
     bool? showCustomerDetails,
     bool? showFooter,
+    Value<int?> tenantId = const Value.absent(),
     Value<String?> customConfig = const Value.absent(),
     DateTime? updatedAt,
   }) => InvoiceSettingEntity(
@@ -5967,9 +6131,14 @@ class InvoiceSettingEntity extends DataClass
     accentColor: accentColor ?? this.accentColor,
     fontFamily: fontFamily ?? this.fontFamily,
     fontSizeMultiplier: fontSizeMultiplier ?? this.fontSizeMultiplier,
+    logoPath: logoPath.present ? logoPath.value : this.logoPath,
+    thermalWidth: thermalWidth ?? this.thermalWidth,
+    showLogo: showLogo ?? this.showLogo,
+    showTaxBreakdown: showTaxBreakdown ?? this.showTaxBreakdown,
     showAddress: showAddress ?? this.showAddress,
     showCustomerDetails: showCustomerDetails ?? this.showCustomerDetails,
     showFooter: showFooter ?? this.showFooter,
+    tenantId: tenantId.present ? tenantId.value : this.tenantId,
     customConfig: customConfig.present ? customConfig.value : this.customConfig,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -5989,6 +6158,14 @@ class InvoiceSettingEntity extends DataClass
       fontSizeMultiplier: data.fontSizeMultiplier.present
           ? data.fontSizeMultiplier.value
           : this.fontSizeMultiplier,
+      logoPath: data.logoPath.present ? data.logoPath.value : this.logoPath,
+      thermalWidth: data.thermalWidth.present
+          ? data.thermalWidth.value
+          : this.thermalWidth,
+      showLogo: data.showLogo.present ? data.showLogo.value : this.showLogo,
+      showTaxBreakdown: data.showTaxBreakdown.present
+          ? data.showTaxBreakdown.value
+          : this.showTaxBreakdown,
       showAddress: data.showAddress.present
           ? data.showAddress.value
           : this.showAddress,
@@ -5998,6 +6175,7 @@ class InvoiceSettingEntity extends DataClass
       showFooter: data.showFooter.present
           ? data.showFooter.value
           : this.showFooter,
+      tenantId: data.tenantId.present ? data.tenantId.value : this.tenantId,
       customConfig: data.customConfig.present
           ? data.customConfig.value
           : this.customConfig,
@@ -6014,9 +6192,14 @@ class InvoiceSettingEntity extends DataClass
           ..write('accentColor: $accentColor, ')
           ..write('fontFamily: $fontFamily, ')
           ..write('fontSizeMultiplier: $fontSizeMultiplier, ')
+          ..write('logoPath: $logoPath, ')
+          ..write('thermalWidth: $thermalWidth, ')
+          ..write('showLogo: $showLogo, ')
+          ..write('showTaxBreakdown: $showTaxBreakdown, ')
           ..write('showAddress: $showAddress, ')
           ..write('showCustomerDetails: $showCustomerDetails, ')
           ..write('showFooter: $showFooter, ')
+          ..write('tenantId: $tenantId, ')
           ..write('customConfig: $customConfig, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6031,9 +6214,14 @@ class InvoiceSettingEntity extends DataClass
     accentColor,
     fontFamily,
     fontSizeMultiplier,
+    logoPath,
+    thermalWidth,
+    showLogo,
+    showTaxBreakdown,
     showAddress,
     showCustomerDetails,
     showFooter,
+    tenantId,
     customConfig,
     updatedAt,
   );
@@ -6047,9 +6235,14 @@ class InvoiceSettingEntity extends DataClass
           other.accentColor == this.accentColor &&
           other.fontFamily == this.fontFamily &&
           other.fontSizeMultiplier == this.fontSizeMultiplier &&
+          other.logoPath == this.logoPath &&
+          other.thermalWidth == this.thermalWidth &&
+          other.showLogo == this.showLogo &&
+          other.showTaxBreakdown == this.showTaxBreakdown &&
           other.showAddress == this.showAddress &&
           other.showCustomerDetails == this.showCustomerDetails &&
           other.showFooter == this.showFooter &&
+          other.tenantId == this.tenantId &&
           other.customConfig == this.customConfig &&
           other.updatedAt == this.updatedAt);
 }
@@ -6061,9 +6254,14 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
   final Value<String> accentColor;
   final Value<String> fontFamily;
   final Value<double> fontSizeMultiplier;
+  final Value<String?> logoPath;
+  final Value<int> thermalWidth;
+  final Value<bool> showLogo;
+  final Value<bool> showTaxBreakdown;
   final Value<bool> showAddress;
   final Value<bool> showCustomerDetails;
   final Value<bool> showFooter;
+  final Value<int?> tenantId;
   final Value<String?> customConfig;
   final Value<DateTime> updatedAt;
   const InvoiceSettingsCompanion({
@@ -6073,26 +6271,35 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
     this.accentColor = const Value.absent(),
     this.fontFamily = const Value.absent(),
     this.fontSizeMultiplier = const Value.absent(),
+    this.logoPath = const Value.absent(),
+    this.thermalWidth = const Value.absent(),
+    this.showLogo = const Value.absent(),
+    this.showTaxBreakdown = const Value.absent(),
     this.showAddress = const Value.absent(),
     this.showCustomerDetails = const Value.absent(),
     this.showFooter = const Value.absent(),
+    this.tenantId = const Value.absent(),
     this.customConfig = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   InvoiceSettingsCompanion.insert({
     this.id = const Value.absent(),
     required String layout,
-    required String footerMessage,
+    this.footerMessage = const Value.absent(),
     this.accentColor = const Value.absent(),
     this.fontFamily = const Value.absent(),
     this.fontSizeMultiplier = const Value.absent(),
+    this.logoPath = const Value.absent(),
+    this.thermalWidth = const Value.absent(),
+    this.showLogo = const Value.absent(),
+    this.showTaxBreakdown = const Value.absent(),
     this.showAddress = const Value.absent(),
     this.showCustomerDetails = const Value.absent(),
     this.showFooter = const Value.absent(),
+    this.tenantId = const Value.absent(),
     this.customConfig = const Value.absent(),
     this.updatedAt = const Value.absent(),
-  }) : layout = Value(layout),
-       footerMessage = Value(footerMessage);
+  }) : layout = Value(layout);
   static Insertable<InvoiceSettingEntity> custom({
     Expression<int>? id,
     Expression<String>? layout,
@@ -6100,9 +6307,14 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
     Expression<String>? accentColor,
     Expression<String>? fontFamily,
     Expression<double>? fontSizeMultiplier,
+    Expression<String>? logoPath,
+    Expression<int>? thermalWidth,
+    Expression<bool>? showLogo,
+    Expression<bool>? showTaxBreakdown,
     Expression<bool>? showAddress,
     Expression<bool>? showCustomerDetails,
     Expression<bool>? showFooter,
+    Expression<int>? tenantId,
     Expression<String>? customConfig,
     Expression<DateTime>? updatedAt,
   }) {
@@ -6114,10 +6326,15 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
       if (fontFamily != null) 'font_family': fontFamily,
       if (fontSizeMultiplier != null)
         'font_size_multiplier': fontSizeMultiplier,
+      if (logoPath != null) 'logo_path': logoPath,
+      if (thermalWidth != null) 'thermal_width': thermalWidth,
+      if (showLogo != null) 'show_logo': showLogo,
+      if (showTaxBreakdown != null) 'show_tax_breakdown': showTaxBreakdown,
       if (showAddress != null) 'show_address': showAddress,
       if (showCustomerDetails != null)
         'show_customer_details': showCustomerDetails,
       if (showFooter != null) 'show_footer': showFooter,
+      if (tenantId != null) 'tenant_id': tenantId,
       if (customConfig != null) 'custom_config': customConfig,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -6130,9 +6347,14 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
     Value<String>? accentColor,
     Value<String>? fontFamily,
     Value<double>? fontSizeMultiplier,
+    Value<String?>? logoPath,
+    Value<int>? thermalWidth,
+    Value<bool>? showLogo,
+    Value<bool>? showTaxBreakdown,
     Value<bool>? showAddress,
     Value<bool>? showCustomerDetails,
     Value<bool>? showFooter,
+    Value<int?>? tenantId,
     Value<String?>? customConfig,
     Value<DateTime>? updatedAt,
   }) {
@@ -6143,9 +6365,14 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
       accentColor: accentColor ?? this.accentColor,
       fontFamily: fontFamily ?? this.fontFamily,
       fontSizeMultiplier: fontSizeMultiplier ?? this.fontSizeMultiplier,
+      logoPath: logoPath ?? this.logoPath,
+      thermalWidth: thermalWidth ?? this.thermalWidth,
+      showLogo: showLogo ?? this.showLogo,
+      showTaxBreakdown: showTaxBreakdown ?? this.showTaxBreakdown,
       showAddress: showAddress ?? this.showAddress,
       showCustomerDetails: showCustomerDetails ?? this.showCustomerDetails,
       showFooter: showFooter ?? this.showFooter,
+      tenantId: tenantId ?? this.tenantId,
       customConfig: customConfig ?? this.customConfig,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -6172,6 +6399,18 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
     if (fontSizeMultiplier.present) {
       map['font_size_multiplier'] = Variable<double>(fontSizeMultiplier.value);
     }
+    if (logoPath.present) {
+      map['logo_path'] = Variable<String>(logoPath.value);
+    }
+    if (thermalWidth.present) {
+      map['thermal_width'] = Variable<int>(thermalWidth.value);
+    }
+    if (showLogo.present) {
+      map['show_logo'] = Variable<bool>(showLogo.value);
+    }
+    if (showTaxBreakdown.present) {
+      map['show_tax_breakdown'] = Variable<bool>(showTaxBreakdown.value);
+    }
     if (showAddress.present) {
       map['show_address'] = Variable<bool>(showAddress.value);
     }
@@ -6180,6 +6419,9 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
     }
     if (showFooter.present) {
       map['show_footer'] = Variable<bool>(showFooter.value);
+    }
+    if (tenantId.present) {
+      map['tenant_id'] = Variable<int>(tenantId.value);
     }
     if (customConfig.present) {
       map['custom_config'] = Variable<String>(customConfig.value);
@@ -6199,9 +6441,14 @@ class InvoiceSettingsCompanion extends UpdateCompanion<InvoiceSettingEntity> {
           ..write('accentColor: $accentColor, ')
           ..write('fontFamily: $fontFamily, ')
           ..write('fontSizeMultiplier: $fontSizeMultiplier, ')
+          ..write('logoPath: $logoPath, ')
+          ..write('thermalWidth: $thermalWidth, ')
+          ..write('showLogo: $showLogo, ')
+          ..write('showTaxBreakdown: $showTaxBreakdown, ')
           ..write('showAddress: $showAddress, ')
           ..write('showCustomerDetails: $showCustomerDetails, ')
           ..write('showFooter: $showFooter, ')
+          ..write('tenantId: $tenantId, ')
           ..write('customConfig: $customConfig, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6310,6 +6557,17 @@ class $InvoicesTable extends Invoices
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _paymentMethodMeta = const VerificationMeta(
+    'paymentMethod',
+  );
+  @override
+  late final GeneratedColumn<String> paymentMethod = GeneratedColumn<String>(
+    'payment_method',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _signUrlMeta = const VerificationMeta(
     'signUrl',
   );
@@ -6394,6 +6652,7 @@ class $InvoicesTable extends Invoices
     tax,
     discount,
     total,
+    paymentMethod,
     signUrl,
     tenantId,
     createdAt,
@@ -6479,6 +6738,15 @@ class $InvoicesTable extends Invoices
     } else if (isInserting) {
       context.missing(_totalMeta);
     }
+    if (data.containsKey('payment_method')) {
+      context.handle(
+        _paymentMethodMeta,
+        paymentMethod.isAcceptableOrUnknown(
+          data['payment_method']!,
+          _paymentMethodMeta,
+        ),
+      );
+    }
     if (data.containsKey('sign_url')) {
       context.handle(
         _signUrlMeta,
@@ -6562,6 +6830,10 @@ class $InvoicesTable extends Invoices
         DriftSqlType.double,
         data['${effectivePrefix}total'],
       )!,
+      paymentMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payment_method'],
+      ),
       signUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}sign_url'],
@@ -6605,6 +6877,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
   final double tax;
   final double discount;
   final double total;
+  final String? paymentMethod;
   final String? signUrl;
   final int tenantId;
   final DateTime createdAt;
@@ -6621,6 +6894,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
     required this.tax,
     required this.discount,
     required this.total,
+    this.paymentMethod,
     this.signUrl,
     required this.tenantId,
     required this.createdAt,
@@ -6642,6 +6916,9 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
     map['tax'] = Variable<double>(tax);
     map['discount'] = Variable<double>(discount);
     map['total'] = Variable<double>(total);
+    if (!nullToAbsent || paymentMethod != null) {
+      map['payment_method'] = Variable<String>(paymentMethod);
+    }
     if (!nullToAbsent || signUrl != null) {
       map['sign_url'] = Variable<String>(signUrl);
     }
@@ -6666,6 +6943,9 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
       tax: Value(tax),
       discount: Value(discount),
       total: Value(total),
+      paymentMethod: paymentMethod == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paymentMethod),
       signUrl: signUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(signUrl),
@@ -6692,6 +6972,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
       tax: serializer.fromJson<double>(json['tax']),
       discount: serializer.fromJson<double>(json['discount']),
       total: serializer.fromJson<double>(json['total']),
+      paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
       signUrl: serializer.fromJson<String?>(json['signUrl']),
       tenantId: serializer.fromJson<int>(json['tenantId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -6713,6 +6994,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
       'tax': serializer.toJson<double>(tax),
       'discount': serializer.toJson<double>(discount),
       'total': serializer.toJson<double>(total),
+      'paymentMethod': serializer.toJson<String?>(paymentMethod),
       'signUrl': serializer.toJson<String?>(signUrl),
       'tenantId': serializer.toJson<int>(tenantId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -6732,6 +7014,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
     double? tax,
     double? discount,
     double? total,
+    Value<String?> paymentMethod = const Value.absent(),
     Value<String?> signUrl = const Value.absent(),
     int? tenantId,
     DateTime? createdAt,
@@ -6748,6 +7031,9 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
     tax: tax ?? this.tax,
     discount: discount ?? this.discount,
     total: total ?? this.total,
+    paymentMethod: paymentMethod.present
+        ? paymentMethod.value
+        : this.paymentMethod,
     signUrl: signUrl.present ? signUrl.value : this.signUrl,
     tenantId: tenantId ?? this.tenantId,
     createdAt: createdAt ?? this.createdAt,
@@ -6770,6 +7056,9 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
       tax: data.tax.present ? data.tax.value : this.tax,
       discount: data.discount.present ? data.discount.value : this.discount,
       total: data.total.present ? data.total.value : this.total,
+      paymentMethod: data.paymentMethod.present
+          ? data.paymentMethod.value
+          : this.paymentMethod,
       signUrl: data.signUrl.present ? data.signUrl.value : this.signUrl,
       tenantId: data.tenantId.present ? data.tenantId.value : this.tenantId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -6793,6 +7082,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
           ..write('tax: $tax, ')
           ..write('discount: $discount, ')
           ..write('total: $total, ')
+          ..write('paymentMethod: $paymentMethod, ')
           ..write('signUrl: $signUrl, ')
           ..write('tenantId: $tenantId, ')
           ..write('createdAt: $createdAt, ')
@@ -6814,6 +7104,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
     tax,
     discount,
     total,
+    paymentMethod,
     signUrl,
     tenantId,
     createdAt,
@@ -6834,6 +7125,7 @@ class InvoiceEntity extends DataClass implements Insertable<InvoiceEntity> {
           other.tax == this.tax &&
           other.discount == this.discount &&
           other.total == this.total &&
+          other.paymentMethod == this.paymentMethod &&
           other.signUrl == this.signUrl &&
           other.tenantId == this.tenantId &&
           other.createdAt == this.createdAt &&
@@ -6852,6 +7144,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
   final Value<double> tax;
   final Value<double> discount;
   final Value<double> total;
+  final Value<String?> paymentMethod;
   final Value<String?> signUrl;
   final Value<int> tenantId;
   final Value<DateTime> createdAt;
@@ -6868,6 +7161,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
     this.tax = const Value.absent(),
     this.discount = const Value.absent(),
     this.total = const Value.absent(),
+    this.paymentMethod = const Value.absent(),
     this.signUrl = const Value.absent(),
     this.tenantId = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -6885,6 +7179,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
     required double tax,
     this.discount = const Value.absent(),
     required double total,
+    this.paymentMethod = const Value.absent(),
     this.signUrl = const Value.absent(),
     required int tenantId,
     this.createdAt = const Value.absent(),
@@ -6908,6 +7203,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
     Expression<double>? tax,
     Expression<double>? discount,
     Expression<double>? total,
+    Expression<String>? paymentMethod,
     Expression<String>? signUrl,
     Expression<int>? tenantId,
     Expression<DateTime>? createdAt,
@@ -6925,6 +7221,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
       if (tax != null) 'tax': tax,
       if (discount != null) 'discount': discount,
       if (total != null) 'total': total,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
       if (signUrl != null) 'sign_url': signUrl,
       if (tenantId != null) 'tenant_id': tenantId,
       if (createdAt != null) 'created_at': createdAt,
@@ -6944,6 +7241,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
     Value<double>? tax,
     Value<double>? discount,
     Value<double>? total,
+    Value<String?>? paymentMethod,
     Value<String?>? signUrl,
     Value<int>? tenantId,
     Value<DateTime>? createdAt,
@@ -6961,6 +7259,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
       tax: tax ?? this.tax,
       discount: discount ?? this.discount,
       total: total ?? this.total,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       signUrl: signUrl ?? this.signUrl,
       tenantId: tenantId ?? this.tenantId,
       createdAt: createdAt ?? this.createdAt,
@@ -7000,6 +7299,9 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
     if (total.present) {
       map['total'] = Variable<double>(total.value);
     }
+    if (paymentMethod.present) {
+      map['payment_method'] = Variable<String>(paymentMethod.value);
+    }
     if (signUrl.present) {
       map['sign_url'] = Variable<String>(signUrl.value);
     }
@@ -7033,6 +7335,7 @@ class InvoicesCompanion extends UpdateCompanion<InvoiceEntity> {
           ..write('tax: $tax, ')
           ..write('discount: $discount, ')
           ..write('total: $total, ')
+          ..write('paymentMethod: $paymentMethod, ')
           ..write('signUrl: $signUrl, ')
           ..write('tenantId: $tenantId, ')
           ..write('createdAt: $createdAt, ')
@@ -11653,13 +11956,18 @@ typedef $$InvoiceSettingsTableCreateCompanionBuilder =
     InvoiceSettingsCompanion Function({
       Value<int> id,
       required String layout,
-      required String footerMessage,
+      Value<String> footerMessage,
       Value<String> accentColor,
       Value<String> fontFamily,
       Value<double> fontSizeMultiplier,
+      Value<String?> logoPath,
+      Value<int> thermalWidth,
+      Value<bool> showLogo,
+      Value<bool> showTaxBreakdown,
       Value<bool> showAddress,
       Value<bool> showCustomerDetails,
       Value<bool> showFooter,
+      Value<int?> tenantId,
       Value<String?> customConfig,
       Value<DateTime> updatedAt,
     });
@@ -11671,9 +11979,14 @@ typedef $$InvoiceSettingsTableUpdateCompanionBuilder =
       Value<String> accentColor,
       Value<String> fontFamily,
       Value<double> fontSizeMultiplier,
+      Value<String?> logoPath,
+      Value<int> thermalWidth,
+      Value<bool> showLogo,
+      Value<bool> showTaxBreakdown,
       Value<bool> showAddress,
       Value<bool> showCustomerDetails,
       Value<bool> showFooter,
+      Value<int?> tenantId,
       Value<String?> customConfig,
       Value<DateTime> updatedAt,
     });
@@ -11717,6 +12030,26 @@ class $$InvoiceSettingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get logoPath => $composableBuilder(
+    column: $table.logoPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get thermalWidth => $composableBuilder(
+    column: $table.thermalWidth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showLogo => $composableBuilder(
+    column: $table.showLogo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showTaxBreakdown => $composableBuilder(
+    column: $table.showTaxBreakdown,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get showAddress => $composableBuilder(
     column: $table.showAddress,
     builder: (column) => ColumnFilters(column),
@@ -11729,6 +12062,11 @@ class $$InvoiceSettingsTableFilterComposer
 
   ColumnFilters<bool> get showFooter => $composableBuilder(
     column: $table.showFooter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tenantId => $composableBuilder(
+    column: $table.tenantId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11782,6 +12120,26 @@ class $$InvoiceSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get logoPath => $composableBuilder(
+    column: $table.logoPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get thermalWidth => $composableBuilder(
+    column: $table.thermalWidth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get showLogo => $composableBuilder(
+    column: $table.showLogo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get showTaxBreakdown => $composableBuilder(
+    column: $table.showTaxBreakdown,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get showAddress => $composableBuilder(
     column: $table.showAddress,
     builder: (column) => ColumnOrderings(column),
@@ -11794,6 +12152,11 @@ class $$InvoiceSettingsTableOrderingComposer
 
   ColumnOrderings<bool> get showFooter => $composableBuilder(
     column: $table.showFooter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get tenantId => $composableBuilder(
+    column: $table.tenantId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -11843,6 +12206,22 @@ class $$InvoiceSettingsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get logoPath =>
+      $composableBuilder(column: $table.logoPath, builder: (column) => column);
+
+  GeneratedColumn<int> get thermalWidth => $composableBuilder(
+    column: $table.thermalWidth,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get showLogo =>
+      $composableBuilder(column: $table.showLogo, builder: (column) => column);
+
+  GeneratedColumn<bool> get showTaxBreakdown => $composableBuilder(
+    column: $table.showTaxBreakdown,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get showAddress => $composableBuilder(
     column: $table.showAddress,
     builder: (column) => column,
@@ -11857,6 +12236,9 @@ class $$InvoiceSettingsTableAnnotationComposer
     column: $table.showFooter,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get tenantId =>
+      $composableBuilder(column: $table.tenantId, builder: (column) => column);
 
   GeneratedColumn<String> get customConfig => $composableBuilder(
     column: $table.customConfig,
@@ -11910,9 +12292,14 @@ class $$InvoiceSettingsTableTableManager
                 Value<String> accentColor = const Value.absent(),
                 Value<String> fontFamily = const Value.absent(),
                 Value<double> fontSizeMultiplier = const Value.absent(),
+                Value<String?> logoPath = const Value.absent(),
+                Value<int> thermalWidth = const Value.absent(),
+                Value<bool> showLogo = const Value.absent(),
+                Value<bool> showTaxBreakdown = const Value.absent(),
                 Value<bool> showAddress = const Value.absent(),
                 Value<bool> showCustomerDetails = const Value.absent(),
                 Value<bool> showFooter = const Value.absent(),
+                Value<int?> tenantId = const Value.absent(),
                 Value<String?> customConfig = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => InvoiceSettingsCompanion(
@@ -11922,9 +12309,14 @@ class $$InvoiceSettingsTableTableManager
                 accentColor: accentColor,
                 fontFamily: fontFamily,
                 fontSizeMultiplier: fontSizeMultiplier,
+                logoPath: logoPath,
+                thermalWidth: thermalWidth,
+                showLogo: showLogo,
+                showTaxBreakdown: showTaxBreakdown,
                 showAddress: showAddress,
                 showCustomerDetails: showCustomerDetails,
                 showFooter: showFooter,
+                tenantId: tenantId,
                 customConfig: customConfig,
                 updatedAt: updatedAt,
               ),
@@ -11932,13 +12324,18 @@ class $$InvoiceSettingsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String layout,
-                required String footerMessage,
+                Value<String> footerMessage = const Value.absent(),
                 Value<String> accentColor = const Value.absent(),
                 Value<String> fontFamily = const Value.absent(),
                 Value<double> fontSizeMultiplier = const Value.absent(),
+                Value<String?> logoPath = const Value.absent(),
+                Value<int> thermalWidth = const Value.absent(),
+                Value<bool> showLogo = const Value.absent(),
+                Value<bool> showTaxBreakdown = const Value.absent(),
                 Value<bool> showAddress = const Value.absent(),
                 Value<bool> showCustomerDetails = const Value.absent(),
                 Value<bool> showFooter = const Value.absent(),
+                Value<int?> tenantId = const Value.absent(),
                 Value<String?> customConfig = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => InvoiceSettingsCompanion.insert(
@@ -11948,9 +12345,14 @@ class $$InvoiceSettingsTableTableManager
                 accentColor: accentColor,
                 fontFamily: fontFamily,
                 fontSizeMultiplier: fontSizeMultiplier,
+                logoPath: logoPath,
+                thermalWidth: thermalWidth,
+                showLogo: showLogo,
+                showTaxBreakdown: showTaxBreakdown,
                 showAddress: showAddress,
                 showCustomerDetails: showCustomerDetails,
                 showFooter: showFooter,
+                tenantId: tenantId,
                 customConfig: customConfig,
                 updatedAt: updatedAt,
               ),
@@ -11994,6 +12396,7 @@ typedef $$InvoicesTableCreateCompanionBuilder =
       required double tax,
       Value<double> discount,
       required double total,
+      Value<String?> paymentMethod,
       Value<String?> signUrl,
       required int tenantId,
       Value<DateTime> createdAt,
@@ -12012,6 +12415,7 @@ typedef $$InvoicesTableUpdateCompanionBuilder =
       Value<double> tax,
       Value<double> discount,
       Value<double> total,
+      Value<String?> paymentMethod,
       Value<String?> signUrl,
       Value<int> tenantId,
       Value<DateTime> createdAt,
@@ -12071,6 +12475,11 @@ class $$InvoicesTableFilterComposer
 
   ColumnFilters<double> get total => $composableBuilder(
     column: $table.total,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12159,6 +12568,11 @@ class $$InvoicesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get signUrl => $composableBuilder(
     column: $table.signUrl,
     builder: (column) => ColumnOrderings(column),
@@ -12230,6 +12644,11 @@ class $$InvoicesTableAnnotationComposer
   GeneratedColumn<double> get total =>
       $composableBuilder(column: $table.total, builder: (column) => column);
 
+  GeneratedColumn<String> get paymentMethod => $composableBuilder(
+    column: $table.paymentMethod,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get signUrl =>
       $composableBuilder(column: $table.signUrl, builder: (column) => column);
 
@@ -12291,6 +12710,7 @@ class $$InvoicesTableTableManager
                 Value<double> tax = const Value.absent(),
                 Value<double> discount = const Value.absent(),
                 Value<double> total = const Value.absent(),
+                Value<String?> paymentMethod = const Value.absent(),
                 Value<String?> signUrl = const Value.absent(),
                 Value<int> tenantId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -12307,6 +12727,7 @@ class $$InvoicesTableTableManager
                 tax: tax,
                 discount: discount,
                 total: total,
+                paymentMethod: paymentMethod,
                 signUrl: signUrl,
                 tenantId: tenantId,
                 createdAt: createdAt,
@@ -12325,6 +12746,7 @@ class $$InvoicesTableTableManager
                 required double tax,
                 Value<double> discount = const Value.absent(),
                 required double total,
+                Value<String?> paymentMethod = const Value.absent(),
                 Value<String?> signUrl = const Value.absent(),
                 required int tenantId,
                 Value<DateTime> createdAt = const Value.absent(),
@@ -12341,6 +12763,7 @@ class $$InvoicesTableTableManager
                 tax: tax,
                 discount: discount,
                 total: total,
+                paymentMethod: paymentMethod,
                 signUrl: signUrl,
                 tenantId: tenantId,
                 createdAt: createdAt,

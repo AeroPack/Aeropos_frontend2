@@ -58,7 +58,7 @@ class SalesListScreen extends ConsumerWidget {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          "${customer?.name ?? 'Walk-in Customer'} • ${DateFormat('dd MMM, yyyy HH:mm').format(invoice.date)}",
+                          "${customer?.name ?? 'Walk-in Customer'} • ${DateFormat('dd MMM, yyyy HH:mm').format(invoice.date)}${invoice.paymentMethod != null ? ' • ${invoice.paymentMethod!.toUpperCase()}' : ''}",
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,

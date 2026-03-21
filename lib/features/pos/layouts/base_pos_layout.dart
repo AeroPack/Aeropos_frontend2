@@ -4,25 +4,6 @@ import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
 
 /// Base class for all POS layout widgets.
-///
-/// HOW TO CREATE A NEW LAYOUT:
-/// 1. Create a new file in features/pos/layouts/
-/// 2. Extend [BasePosLayout] and implement [createState]
-/// 3. Your state class should extend [BasePosLayoutState]
-/// 4. Override [build] to arrange the UI using the provided data
-/// 5. Add the layout to [PosLayoutType] enum in pos_layout_provider.dart
-/// 6. Add a case for it in the switch statement in pos_screen.dart
-///
-/// Available data via widget properties:
-/// - [cartState]: Current cart with items, totals, discounts
-/// - [cartNotifier]: Mutate cart (add/remove/update items)
-/// - [products]: Async list of products (use .when() to handle loading/error)
-/// - [categories]: Async list of categories
-/// - [selectedCategoryId]: Currently filtered category (null = all)
-/// - [searchQuery]: Current product search text
-/// - Callbacks: [onProductTap], [onCategoryTap], [onSearch],
-///   [onCheckout], [onOpenInvoiceSettings], [onOpenSalesHistory],
-///   [onShowAddCustomerDialog]
 abstract class BasePosLayout extends ConsumerStatefulWidget {
   final CartState cartState;
   final CartNotifier cartNotifier;
@@ -30,12 +11,13 @@ abstract class BasePosLayout extends ConsumerStatefulWidget {
   final AsyncValue<List<CategoryEntity>> categories;
   final int? selectedCategoryId;
   final String searchQuery;
+  final void Function({required bool shouldSave, String? paymentMethod})
+  onCheckout;
 
   // Callbacks — keeps business logic in PosScreen
   final void Function(ProductEntity product) onProductTap;
   final void Function(int? categoryId) onCategoryTap;
   final void Function(String query) onSearch;
-  final void Function({bool shouldSave}) onCheckout;
   final VoidCallback onOpenInvoiceSettings;
   final VoidCallback onOpenSalesHistory;
   final VoidCallback onShowAddCustomerDialog;

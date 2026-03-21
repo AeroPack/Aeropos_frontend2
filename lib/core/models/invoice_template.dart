@@ -1,7 +1,8 @@
-import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/app_database.dart';
 import '../di/service_locator.dart';
+import '../providers/tenant_provider.dart';
+import '../../features/invoice/invoice_template_editor/template_repository.dart';
 
 enum InvoiceLayout {
   thermal,
@@ -77,7 +78,8 @@ class InvoiceTemplateNotifier extends Notifier<InvoiceTemplate> {
   }
 
   Future<void> _loadFromDb() async {
-    final entity = await _db.getInvoiceSettings();
+    final tenantId = ref.read(tenantIdProvider);
+    final entity = await _db.getInvoiceSettingsForTenant(tenantId);
     if (entity != null) {
       state = InvoiceTemplate.fromEntity(entity);
     }
@@ -108,20 +110,17 @@ class InvoiceTemplateNotifier extends Notifier<InvoiceTemplate> {
 
     state = newState;
 
-    await _db.upsertInvoiceSettings(
-      InvoiceSettingsCompanion(
-        id: const Value(1),
-        layout: Value(newState.layout.name),
-        footerMessage: Value(newState.footerMessage),
-        accentColor: Value(newState.accentColor),
-        fontFamily: Value(newState.fontFamily),
-        fontSizeMultiplier: Value(newState.fontSizeMultiplier),
-        showAddress: Value(newState.showAddress),
-        showCustomerDetails: Value(newState.showCustomerDetails),
-        showFooter: Value(newState.showFooter),
-        customConfig: Value(newState.customConfig),
-        updatedAt: Value(DateTime.now()),
-      ),
+    final tenantId = ref.read(tenantIdProvider);
+    final repo = ref.read(invoiceTemplateRepositoryProvider);
+
+    await repo.saveTemplateSelection(
+      tenantId: tenantId,
+      templateId: newState.layout.name,
+      accentColorHex: newState.accentColor,
+      fontFamily: newState.fontFamily,
+      logoPath: null,
+      thermalWidth: null,
+      showTaxBreakdown: null,
     );
   }
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
+import 'package:ezo/core/theme/app_theme.dart';
 
 /// Reusable totals display for POS layouts.
-/// Set [compact] for narrower panels.
 class PosTotalsDisplay extends StatelessWidget {
   final CartState cartState;
   final bool compact;
@@ -19,30 +19,35 @@ class PosTotalsDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fontSize = compact ? 13.0 : 16.0;
-    final totalFontSize = compact ? 16.0 : 20.0;
+    final fontSize = compact ? 13.0 : 15.0;
+    final totalFontSize = compact ? 18.0 : 22.0;
 
     return Container(
-      padding: EdgeInsets.all(compact ? 12 : 16),
+      padding: EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.grey100)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           if (!compact)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: Text(
-                'Payment Summary',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                'BILLING SUMMARY',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  color: AppColors.text.withValues(alpha: 0.6),
+                ),
               ),
             ),
           _row('Sub Total', 'Rs ${cartState.subtotal.toStringAsFixed(2)}',
               fontSize: fontSize),
-          _row('GST', 'Rs ${cartState.taxAmount.toStringAsFixed(2)}',
+          _row('Tax (GST)', 'Rs ${cartState.taxAmount.toStringAsFixed(2)}',
               fontSize: fontSize),
           if (cartState.totalDiscount > 0)
             _row(
@@ -51,46 +56,58 @@ class PosTotalsDisplay extends StatelessWidget {
               fontSize: fontSize,
               isRed: true,
             ),
-          Divider(height: compact ? 12 : 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                compact ? 'Total' : 'Amount to be Paid',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: totalFontSize,
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  compact ? 'GRAND TOTAL' : 'TOTAL AMOUNT',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: compact ? 14 : 15,
+                    letterSpacing: 0.5,
+                    color: AppColors.text,
+                  ),
                 ),
-              ),
-              Text(
-                'Rs ${cartState.total.toInt()}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: totalFontSize,
+                Text(
+                  'Rs ${cartState.total.toInt()}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: totalFontSize,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (onCheckout != null) ...[
-            SizedBox(height: compact ? 8 : 16),
+            const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,
-              height: compact ? 40 : 50,
+              height: compact ? 44 : 54,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF007AFF),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.surface,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 onPressed:
                     cartState.items.isEmpty ? null : onCheckout,
                 child: Text(
-                  'Checkout',
+                  'COMPLETE ORDER',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: compact ? 14 : 16,
+                    fontWeight: FontWeight.w900,
+                    fontSize: compact ? 13 : 15,
+                    letterSpacing: 1,
                   ),
                 ),
               ),
@@ -104,23 +121,23 @@ class PosTotalsDisplay extends StatelessWidget {
   Widget _row(String label, String value,
       {bool isRed = false, double fontSize = 16}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: TextStyle(
-              color: isRed ? Colors.red : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
+              color: isRed ? AppColors.error : AppColors.grey600,
+              fontWeight: FontWeight.bold,
               fontSize: fontSize,
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              color: isRed ? Colors.red : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
+              color: isRed ? AppColors.error : AppColors.text,
+              fontWeight: FontWeight.w800,
               fontSize: fontSize,
             ),
           ),
