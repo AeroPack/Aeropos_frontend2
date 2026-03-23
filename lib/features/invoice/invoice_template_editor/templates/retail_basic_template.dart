@@ -31,7 +31,7 @@ class RetailBasicTemplate extends InvoiceTemplate {
     final pdf = pw.Document();
     
     // Convert Color to PdfColor
-    final accentColor = PdfColor.fromInt(data.themeColor.value);
+    final accentColor = PdfColor.fromInt(data.themeColor.toARGB32());
 
     // Load logo if available
     pw.MemoryImage? logoImage;

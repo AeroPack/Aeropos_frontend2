@@ -23,6 +23,7 @@ import 'package:ezo/features/suppliers/supplier_list_screen.dart';
 import 'package:ezo/features/employees/employee_list_screen.dart';
 import 'package:ezo/features/pos/pos_screen.dart';
 import 'package:ezo/features/inventory/reports/invoice_settings_screen.dart';
+import 'package:ezo/features/debug_screen.dart';
 
 import 'package:ezo/features/invoice/screens/invoice_form_screen.dart';
 import 'package:ezo/features/invoice/screens/invoice_history_screen.dart';
@@ -307,6 +308,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/invoice-templates',
         builder: (context, state) => const InvoiceTemplateEditorApp(),
+      ),
+
+      // Debug route for database troubleshooting
+      GoRoute(
+        path: '/debug',
+        builder: (context, state) => const DatabaseDebugScreen(),
       ),
     ],
   );

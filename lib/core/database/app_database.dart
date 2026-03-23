@@ -58,6 +58,7 @@ class AppDatabase extends _$AppDatabase {
           try {
             await customStatement('ALTER TABLE users RENAME TO tenants');
           } catch (e) {
+            // ignore: avoid_print
             print('Error renaming users table: $e');
             // Attempt to create tenants if rename failed (maybe users didn't exist)
             await m.createTable(tenants);
@@ -105,8 +106,10 @@ class AppDatabase extends _$AppDatabase {
               await customStatement(
                 'UPDATE "$tableName" SET tenant_id = 1 WHERE tenant_id IS NULL',
               );
+              // ignore: avoid_print
               print('Backfilled tenant_id for $tableName');
             } catch (e) {
+              // ignore: avoid_print
               print('Error backfilling tenant_id for $tableName: $e');
             }
           }
@@ -171,19 +174,24 @@ class AppDatabase extends _$AppDatabase {
             if (colName == 'tenant_id') col = invoiceSettings.tenantId;
             if (colName == 'custom_config') col = invoiceSettings.customConfig;
             if (colName == 'updated_at') col = invoiceSettings.updatedAt;
-            if (colName == 'footer_message') col = invoiceSettings.footerMessage;
+            if (colName == 'footer_message') {
+              col = invoiceSettings.footerMessage;
+            }
             if (colName == 'accent_color') col = invoiceSettings.accentColor;
             if (colName == 'font_family') col = invoiceSettings.fontFamily;
-            if (colName == 'font_size_multiplier')
+            if (colName == 'font_size_multiplier') {
               col = invoiceSettings.fontSizeMultiplier;
+            }
             if (colName == 'logo_path') col = invoiceSettings.logoPath;
             if (colName == 'thermal_width') col = invoiceSettings.thermalWidth;
             if (colName == 'show_logo') col = invoiceSettings.showLogo;
-            if (colName == 'show_tax_breakdown')
+            if (colName == 'show_tax_breakdown') {
               col = invoiceSettings.showTaxBreakdown;
+            }
             if (colName == 'show_address') col = invoiceSettings.showAddress;
-            if (colName == 'show_customer_details')
+            if (colName == 'show_customer_details') {
               col = invoiceSettings.showCustomerDetails;
+            }
             if (colName == 'show_footer') col = invoiceSettings.showFooter;
 
             if (col != null) {
@@ -192,17 +200,39 @@ class AppDatabase extends _$AppDatabase {
           }
 
           // Data Fix: Update any existing NULL values to defaults to avoid Null-check crashes
-          await customStatement('UPDATE "invoice_settings" SET "accent_color" = \'#2A2D64\' WHERE "accent_color" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "font_family" = \'Roboto\' WHERE "font_family" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "font_size_multiplier" = 1.0 WHERE "font_size_multiplier" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "thermal_width" = 80 WHERE "thermal_width" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "show_logo" = 1 WHERE "show_logo" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "show_tax_breakdown" = 1 WHERE "show_tax_breakdown" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "show_address" = 1 WHERE "show_address" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "show_customer_details" = 1 WHERE "show_customer_details" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "show_footer" = 1 WHERE "show_footer" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "footer_message" = \'\' WHERE "footer_message" IS NULL');
-          await customStatement('UPDATE "invoice_settings" SET "updated_at" = CURRENT_TIMESTAMP WHERE "updated_at" IS NULL');
+          await customStatement(
+            'UPDATE "invoice_settings" SET "accent_color" = \'#2A2D64\' WHERE "accent_color" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "font_family" = \'Roboto\' WHERE "font_family" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "font_size_multiplier" = 1.0 WHERE "font_size_multiplier" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "thermal_width" = 80 WHERE "thermal_width" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "show_logo" = 1 WHERE "show_logo" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "show_tax_breakdown" = 1 WHERE "show_tax_breakdown" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "show_address" = 1 WHERE "show_address" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "show_customer_details" = 1 WHERE "show_customer_details" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "show_footer" = 1 WHERE "show_footer" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "footer_message" = \'\' WHERE "footer_message" IS NULL',
+          );
+          await customStatement(
+            'UPDATE "invoice_settings" SET "updated_at" = CURRENT_TIMESTAMP WHERE "updated_at" IS NULL',
+          );
         }
         if (from < 29) {
           // Add payment_method column to invoices table
@@ -250,11 +280,13 @@ class AppDatabase extends _$AppDatabase {
         }
 
         await customStatement(sql);
+        // ignore: avoid_print
         print(
           'Successfully added column $columnName to $tableName via raw SQL',
         );
       }
     } catch (e) {
+      // ignore: avoid_print
       print('Error adding column $columnName: $e');
     }
   }
@@ -420,8 +452,9 @@ class AppDatabase extends _$AppDatabase {
       select(invoiceSettings).getSingleOrNull();
 
   Future<InvoiceSettingEntity?> getInvoiceSettingsForTenant(int tenantId) =>
-      (select(invoiceSettings)..where((t) => t.tenantId.equals(tenantId)))
-          .getSingleOrNull();
+      (select(
+        invoiceSettings,
+      )..where((t) => t.tenantId.equals(tenantId))).getSingleOrNull();
 
   Future<int> upsertInvoiceSettings(InvoiceSettingsCompanion entry) =>
       into(invoiceSettings).insertOnConflictUpdate(entry);
@@ -435,7 +468,27 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  Future<List<InvoiceEntity>> getAllInvoices() => select(invoices).get();
+  Future<int> createInvoiceWithItems(
+    InvoicesCompanion invoice,
+    List<InvoiceItemsCompanion> items,
+  ) async {
+    return transaction(() async {
+      final id = await insertInvoice(invoice);
+      final itemsWithId = items
+          .map((i) => i.copyWith(invoiceId: Value(id)))
+          .toList();
+      await insertInvoiceItems(itemsWithId);
+      return id;
+    });
+  }
+
+  Future<List<InvoiceEntity>> getAllInvoices() async {
+    final result = await select(invoices).get();
+    // ignore: avoid_print
+    print('DB getAllInvoices: found ${result.length} invoices');
+    return result;
+  }
+
   Stream<List<InvoiceEntity>> watchAllInvoices() => select(invoices).watch();
 
   Future<List<InvoiceItemEntity>> getInvoiceItems(int invoiceId) => (select(
@@ -475,12 +528,24 @@ class AppDatabase extends _$AppDatabase {
     required int limit,
     required int offset,
     String? queryStr,
+    int? tenantId,
   }) {
+    // ignore: avoid_print
+    print(
+      'DB getInvoiceItemsDetailedPaginated: tenantId=$tenantId, limit=$limit, offset=$offset',
+    );
+
     final query = select(invoiceItems).join([
       innerJoin(invoices, invoices.id.equalsExp(invoiceItems.invoiceId)),
       innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
+
+    if (tenantId != null) {
+      // ignore: avoid_print
+      print('DB: Filtering by invoices.tenantId = $tenantId');
+      query.where(invoices.tenantId.equals(tenantId));
+    }
 
     if (queryStr != null && queryStr.isNotEmpty) {
       final q = queryStr.toLowerCase();
@@ -490,6 +555,8 @@ class AppDatabase extends _$AppDatabase {
             customers.name.lower().contains(q),
       );
     }
+
+    query.where(invoices.isDeleted.equals(false) & invoiceItems.isDeleted.equals(false));
 
     query.orderBy([
       OrderingTerm.desc(invoices.date),
@@ -501,7 +568,7 @@ class AppDatabase extends _$AppDatabase {
     return query.get();
   }
 
-  Future<int> getInvoiceItemsCount({String? queryStr}) async {
+  Future<int> getInvoiceItemsCount({String? queryStr, int? tenantId}) async {
     final countExp = invoiceItems.id.count();
     final query = selectOnly(invoiceItems)..addColumns([countExp]);
 
@@ -510,6 +577,10 @@ class AppDatabase extends _$AppDatabase {
       innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
+
+    if (tenantId != null) {
+      query.where(invoices.tenantId.equals(tenantId));
+    }
 
     if (queryStr != null && queryStr.isNotEmpty) {
       final q = queryStr.toLowerCase();
@@ -545,6 +616,7 @@ class AppDatabase extends _$AppDatabase {
       // Clear sync metadata to force full sync
       await delete(syncMetadata).go();
 
+      // ignore: avoid_print
       print('All data cleared from local database');
     });
   }

@@ -116,7 +116,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           excludeId: widget.product?.id,
         );
         if (!isSkuUnique) {
-          if (!context.mounted) return;
+          if (!mounted) return;
           PosToast.showError(
             context,
             "SKU already exists. Please use a unique SKU.",
@@ -132,7 +132,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         excludeId: widget.product?.id,
       );
       if (!isNameUnique) {
-        if (!context.mounted) return;
+        if (!mounted) return;
         PosToast.showError(
           context,
           "Product Color or Name already exists. Please use a unique name.",
@@ -683,7 +683,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                                 setState(() => _isPercentDiscount = false),
                             style: TextButton.styleFrom(
                               backgroundColor: !_isPercentDiscount
-                                  ? PosColors.blue.withOpacity(0.1)
+                                  ? PosColors.blue.withValues(alpha: 0.1)
                                   : null,
                               foregroundColor: !_isPercentDiscount
                                   ? PosColors.blue
@@ -696,7 +696,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                                 setState(() => _isPercentDiscount = true),
                             style: TextButton.styleFrom(
                               backgroundColor: _isPercentDiscount
-                                  ? PosColors.blue.withOpacity(0.1)
+                                  ? PosColors.blue.withValues(alpha: 0.1)
                                   : null,
                               foregroundColor: _isPercentDiscount
                                   ? PosColors.blue

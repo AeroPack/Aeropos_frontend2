@@ -268,9 +268,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     _notesController.dispose();
     _taxRateController.dispose();
     _taxLabelController.dispose();
-    for (var controller in _itemDescControllers.values) controller.dispose();
-    for (var controller in _itemQtyControllers.values) controller.dispose();
-    for (var controller in _itemRateControllers.values) controller.dispose();
+    for (var controller in _itemDescControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _itemQtyControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _itemRateControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -348,7 +354,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         tenantId: tenantId,
         templateId: activeTemplate.id,
         accentColorHex:
-            '#${themeColor.value.toRadixString(16).padLeft(8, '0')}',
+            '#${themeColor.toARGB32().toRadixString(16).padLeft(8, '0')}',
         fontFamily: fontFamily,
         logoPath: logoPath,
         thermalWidth: thermalWidth,

@@ -62,85 +62,88 @@ class PosProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
-          border: Border.all(color: AppColors.grey100),
+          border: Border.all(color: AppColors.grey200, width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (showImage)
               Expanded(
+                flex: 4,
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: AppColors.grey50,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(10),
+                    ),
                   ),
                   child: Center(
-                    child: ProductImage(product: product, size: _imageSize),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: double.infinity,
+                      child: ProductImage(product: product, size: _imageSize),
+                    ),
                   ),
                 ),
               ),
             Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.sm,
-                AppSpacing.sm,
-                AppSpacing.sm,
-                showSku ? 2 : AppSpacing.sm,
-              ),
-              child: Text(
-                product.name.toUpperCase(),
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: _titleSize,
-                  letterSpacing: 0.5,
-                  color: AppColors.text,
-                ),
-                maxLines: size == PosCardSize.small ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    product.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: _titleSize,
+                      color: AppColors.text,
+                    ),
+                    maxLines: size == PosCardSize.small ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (showSku && product.sku != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        'SKU: ${product.sku}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.grey400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  if (showPrice)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Rs ${product.price.toInt()}',
+                        style: TextStyle(
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w800,
+                          fontSize: _priceSize,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (showSku && product.sku != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Text(
-                  'SKU: ${product.sku}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.grey400,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            if (showPrice)
-              Padding(
-                padding: EdgeInsets.only(
-                  left: AppSpacing.sm,
-                  bottom: AppSpacing.sm,
-                  top: showSku ? 2 : 0,
-                ),
-                child: Text(
-                  'Rs ${product.price.toInt()}',
-                  style: TextStyle(
-                    color: AppColors.accent,
-                    fontWeight: FontWeight.w900,
-                    fontSize: _priceSize,
-                  ),
-                ),
-              ),
           ],
         ),
       ),

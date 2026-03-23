@@ -3,6 +3,7 @@ import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/di/service_locator.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
+import 'package:ezo/features/invoice/state/invoice_history_state.dart';
 
 class InvoiceItem {
   final ProductEntity product;
@@ -64,10 +65,12 @@ class InvoiceState {
       taxRate: taxRate ?? this.taxRate,
     );
   }
-}  
+}
 
 class InvoiceNotifier extends StateNotifier<InvoiceState> {
-  InvoiceNotifier()
+  final Ref ref;
+
+  InvoiceNotifier(this.ref)
     : super(
         InvoiceState(
           invoiceNumber: 'INV-${DateTime.now().millisecondsSinceEpoch}',
@@ -110,36 +113,43 @@ class InvoiceNotifier extends StateNotifier<InvoiceState> {
 
   Future<void> saveInvoice() async {
     final db = ServiceLocator.instance.database;
+    final tenantId = ServiceLocator.instance.tenantService.tenantId;
 
-    // 1. Create Invoice Record
-    final invoiceId = await db.insertInvoice(
-      InvoicesCompanion(
-        uuid: Value(const Uuid().v4()),
-        invoiceNumber: Value(state.invoiceNumber),
-        customerId: Value(state.selectedCustomer?.id),
-        date: Value(DateTime.now()),
-        subtotal: Value(state.subtotal),
-        tax: Value(state.taxAmount),
-        total: Value(state.total),
-        syncStatus: const Value(1), // Pending
-      ),
+    final invoiceCompanion = InvoicesCompanion(
+      uuid: Value(const Uuid().v4()),
+      invoiceNumber: Value(state.invoiceNumber),
+      customerId: Value(state.selectedCustomer?.id),
+      date: Value(DateTime.now()),
+      subtotal: Value(state.subtotal),
+      tax: Value(state.taxAmount),
+      total: Value(state.total),
+      syncStatus: const Value(1), // Pending
+      tenantId: Value(tenantId),
     );
 
-    // 2. Create Invoice Items
     final itemCompanions = state.items
         .map(
           (item) => InvoiceItemsCompanion(
-            invoiceId: Value(invoiceId),
             productId: Value(item.product.id),
             quantity: Value(item.quantity),
             bonus: Value(item.bonus),
             unitPrice: Value(item.unitPrice),
             totalPrice: Value(item.totalPrice),
+            tenantId: Value(tenantId),
           ),
         )
         .toList();
 
-    await db.insertInvoiceItems(itemCompanions);
+    await db.createInvoiceWithItems(invoiceCompanion, itemCompanions);
+
+    // Refresh history
+    try {
+      final historyNotifier = ref.read(salesHistoryProvider.notifier);
+      historyNotifier.refresh();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Could not refresh sales history: $e');
+    }
 
     reset();
   }
@@ -148,7 +158,7 @@ class InvoiceNotifier extends StateNotifier<InvoiceState> {
 final invoiceProvider = StateNotifierProvider<InvoiceNotifier, InvoiceState>((
   ref,
 ) {
-  return InvoiceNotifier();
+  return InvoiceNotifier(ref);
 });
 
 final productListProvider = StreamProvider<List<ProductEntity>>((ref) {

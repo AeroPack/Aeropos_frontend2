@@ -239,10 +239,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final user = authState.user;
 
     final width = MediaQuery.of(context).size.width;
-    final isLargeDesktop = width > 1200;
-    final isMediumDesktop = width > 1000;
     final isSmallDesktop = width > 900;
-    final isTablet = width > 600;
     final isDesktop = isSmallDesktop;
 
     final visibleGroups = _sidebarGroups

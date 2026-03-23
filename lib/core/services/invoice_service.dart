@@ -69,7 +69,7 @@ class InvoiceService {
           template,
           profile,
         );
-      case InvoiceLayout.advanced_gst:
+      case InvoiceLayout.advancedGst:
         return await AdvancedGstLayout.generate(
           invoice,
           customer,

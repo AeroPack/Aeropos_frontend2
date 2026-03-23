@@ -20,7 +20,7 @@ class ProductListScreen extends StatefulWidget {
 class _ProductListScreenState extends State<ProductListScreen> {
   final viewModel = ServiceLocator.instance.productViewModel;
   User? _currentUser; // Added
-  String? _fetchError;
+  // String? _fetchError; // Removed unused field
 
   @override
   void initState() {
@@ -36,14 +36,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
       if (mounted) {
         setState(() {
           _currentUser = user;
-          _fetchError = user == null ? "User fetch returned null" : null;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _fetchError = e.toString();
-        });
+        setState(() {});
       }
     }
   }
@@ -418,7 +415,7 @@ class _ProductTableRow extends StatelessWidget {
       width: 18,
       height: 18,
       decoration: BoxDecoration(
-        border: Border.all(color: PosColors.textLight.withOpacity(0.3)),
+        border: Border.all(color: PosColors.textLight.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(4),
       ),
     );

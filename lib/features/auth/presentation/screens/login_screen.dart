@@ -54,7 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20),
             ],
           ),
           child: Form(

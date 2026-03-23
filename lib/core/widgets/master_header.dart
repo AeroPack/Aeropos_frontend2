@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
@@ -187,7 +188,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () => context.push('/new-invoice'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
@@ -228,8 +229,9 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
             ],
             if (isTablet)
               IconButton(
-                onPressed: () {},
+                onPressed: () => _toggleFullscreen(context),
                 icon: const Icon(Icons.fullscreen, color: Colors.grey),
+                tooltip: 'Toggle Fullscreen',
               ),
             IconButton(
               onPressed: () {
@@ -241,23 +243,18 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                     elevation: 0,
                     alignment: Alignment.topRight,
                     insetPadding: const EdgeInsets.only(top: 70, right: 16),
-                    child: PosCalculator(
-                      onClose: () => Navigator.pop(ctx),
-                    ),
+                    child: PosCalculator(onClose: () => Navigator.pop(ctx)),
                   ),
                 );
               },
               icon: const Icon(Icons.calculate_outlined, color: Colors.grey),
               tooltip: 'Calculator',
             ),
-            IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.notifications_none, color: Colors.grey),
-            ),
             if (isTablet)
               IconButton(
-                onPressed: () {},
+                onPressed: () => context.push('/settings'),
                 icon: const Icon(Icons.settings_outlined, color: Colors.grey),
+                tooltip: 'Settings',
               ),
             Padding(
               padding: const EdgeInsets.only(right: 16, left: 8),
@@ -356,6 +353,18 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
             ),
           ],
     );
+  }
+
+  void _toggleFullscreen(BuildContext context) {
+    final isFullscreen =
+        MediaQuery.of(context).viewInsets.top > 0 ||
+        MediaQuery.of(context).size.width == MediaQuery.of(context).size.width;
+
+    if (isFullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
   }
 
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {

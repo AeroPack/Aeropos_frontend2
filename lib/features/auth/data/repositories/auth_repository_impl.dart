@@ -13,8 +13,16 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._remoteDataSource, this._storage, this._database);
 
   @override
-  Future<Map<String, dynamic>> login(String email, String password, {int? companyId}) async {
-    final response = await _remoteDataSource.login(email, password, companyId: companyId);
+  Future<Map<String, dynamic>> login(
+    String email,
+    String password, {
+    int? companyId,
+  }) async {
+    final response = await _remoteDataSource.login(
+      email,
+      password,
+      companyId: companyId,
+    );
     // Only store token if login is complete (not company selection)
     final token = response['token'];
     if (token != null) {
@@ -33,7 +41,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> googleLogin({String? idToken, String? accessToken, int? companyId}) async {
+  Future<Map<String, dynamic>> googleLogin({
+    String? idToken,
+    String? accessToken,
+    int? companyId,
+  }) async {
     final response = await _remoteDataSource.googleLogin(
       idToken: idToken,
       accessToken: accessToken,
@@ -57,10 +69,13 @@ class AuthRepositoryImpl implements AuthRepository {
               .get();
 
       if (hasPending.isNotEmpty) {
+        // ignore: avoid_print
         print('⚠️ WARNING: Pending changes detected during logout!');
+        // ignore: avoid_print
         print('   This may indicate sync failed. Data will be lost.');
       }
     } catch (e) {
+      // ignore: avoid_print
       print('Error checking pending changes during logout: $e');
     }
 
@@ -83,6 +98,7 @@ class AuthRepositoryImpl implements AuthRepository {
       }
       return User.fromJson(responseMap);
     } catch (e) {
+      // ignore: avoid_print
       print("Error fetching user: $e");
       return null;
     }
@@ -131,4 +147,3 @@ class AuthRepositoryImpl implements AuthRepository {
     return response;
   }
 }
-

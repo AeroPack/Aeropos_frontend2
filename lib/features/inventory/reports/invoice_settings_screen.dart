@@ -120,7 +120,7 @@ class _InvoiceSettingsScreenState extends ConsumerState<InvoiceSettingsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 20),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF002140).withOpacity(0.05)
+                ? const Color(0xFF002140).withValues(alpha: 0.05)
                 : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(

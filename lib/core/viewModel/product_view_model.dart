@@ -8,8 +8,6 @@ import '../repositories/brand_repository.dart'; // Added
 import '../models/category.dart';
 import '../models/unit.dart';
 import '../models/brand.dart'; // Added
-import 'package:dio/dio.dart' as dio;
-import '../../config/app_config.dart';
 import '../services/device_id_service.dart';
 
 class ProductViewModel {
@@ -122,28 +120,6 @@ class ProductViewModel {
 
   Future<void> deleteProduct(int id) async {
     await _database.deleteProduct(id);
-  }
-
-  Future<String?> _uploadImage(String localPath) async {
-    final d = dio.Dio();
-    try {
-      String fileName = localPath.split('/').last;
-      dio.FormData formData = dio.FormData.fromMap({
-        "file": await dio.MultipartFile.fromFile(localPath, filename: fileName),
-      });
-
-      // Replace with actual media endpoint
-      final response = await d.post(
-        "${AppConfig.apiBaseUrl}/media/upload",
-        data: formData,
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return response.data['url'] as String;
-      }
-    } catch (e) {
-    }
-    return null;
   }
 
   Future<void> syncPendingProducts() async {

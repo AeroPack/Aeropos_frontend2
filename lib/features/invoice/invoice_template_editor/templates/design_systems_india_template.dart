@@ -29,7 +29,7 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
   @override
   pw.Document buildPdf(InvoiceData data) {
     final pdf = pw.Document();
-    final accentColor = PdfColor.fromInt(data.themeColor.value);
+    final accentColor = PdfColor.fromInt(data.themeColor.toARGB32());
 
     // Load logo if available
     pw.MemoryImage? logoImage;
@@ -361,7 +361,7 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Text('INVOICE #: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      Text('INVOICE #: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                       Text('DS-2024-001', style: TextStyle(fontSize: 11)),
                     ],
                   ),

@@ -19,7 +19,6 @@ class CategoryFormDialog extends StatefulWidget {
 }
 
 class _CategoryFormDialogState extends State<CategoryFormDialog> {
-  final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descController;
   bool _isLoading = false;

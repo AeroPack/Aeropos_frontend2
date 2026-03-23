@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:drift/drift.dart' show TypedResult;
 import '../sales/state/sales_state.dart';
 import '../../core/models/sale_stats.dart';
+import '../../core/di/service_locator.dart';
+import 'package:intl/intl.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -9,6 +12,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(salesStatsProvider);
+    final recentSalesAsync = ref.watch(salesListStreamProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFf5f6f7),
@@ -32,7 +36,7 @@ class DashboardScreen extends ConsumerWidget {
                     SizedBox(height: isMobile ? 24 : 40),
                     _buildChartsRow(context, isMobile, isTablet, stats),
                     SizedBox(height: isMobile ? 24 : 40),
-                    _buildTransactionsTable(isMobile),
+                    _buildTransactionsTable(isMobile, recentSalesAsync),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -426,7 +430,7 @@ class DashboardScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Container(
-              height: maxHeight * heightFactor,
+              height: (maxHeight - 24) * heightFactor,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
@@ -595,7 +599,10 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTransactionsTable(bool isMobile) {
+  Widget _buildTransactionsTable(
+    bool isMobile,
+    AsyncValue<List<TypedResult>> salesAsync,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -703,44 +710,62 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ],
-              rows: [
-                _buildTransactionRow(
-                  '#INV-8921',
-                  'Alex Rivera',
-                  isMobile ? 'Oct 24' : 'Oct 24, 2023',
-                  '₦128.50',
-                  'Completed',
-                  true,
-                  isMobile,
-                ),
-                _buildTransactionRow(
-                  '#INV-8920',
-                  'Sarah Chen',
-                  isMobile ? 'Oct 24' : 'Oct 24, 2023',
-                  '₦45.00',
-                  'Refunded',
-                  false,
-                  isMobile,
-                ),
-                _buildTransactionRow(
-                  '#INV-8919',
-                  'Marcus Thorne',
-                  isMobile ? 'Oct 23' : 'Oct 23, 2023',
-                  '₦210.00',
-                  'Completed',
-                  true,
-                  isMobile,
-                ),
-                _buildTransactionRow(
-                  '#INV-8918',
-                  'Elena Sofia',
-                  isMobile ? 'Oct 23' : 'Oct 23, 2023',
-                  '₦89.20',
-                  'Completed',
-                  true,
-                  isMobile,
-                ),
-              ],
+              rows: salesAsync.when(
+                data: (results) {
+                  final db = ServiceLocator.instance.database;
+                  final recent = results.take(5).toList();
+                  if (recent.isEmpty) {
+                    return [
+                      const DataRow(
+                        cells: [
+                          DataCell(Text('No transactions yet')),
+                          DataCell(SizedBox()),
+                          DataCell(SizedBox()),
+                          DataCell(SizedBox()),
+                          DataCell(SizedBox()),
+                        ],
+                      ),
+                    ];
+                  }
+                  return recent.map((TypedResult row) {
+                    final inv = row.readTable(db.invoices);
+                    final cust = row.readTableOrNull(db.customers);
+                    return _buildTransactionRow(
+                      inv.invoiceNumber,
+                      cust?.name ?? 'Walk-in',
+                      DateFormat(isMobile ? 'MMM dd' : 'MMM dd, yyyy').format(
+                        inv.date,
+                      ),
+                      'Rs ${inv.total.toStringAsFixed(2)}',
+                      'Completed',
+                      true,
+                      isMobile,
+                    );
+                  }).toList();
+                },
+                loading: () => [
+                  const DataRow(
+                    cells: [
+                      DataCell(Text('Loading...')),
+                      DataCell(SizedBox()),
+                      DataCell(SizedBox()),
+                      DataCell(SizedBox()),
+                      DataCell(SizedBox()),
+                    ],
+                  ),
+                ],
+                error: (err, _) => [
+                  DataRow(
+                    cells: [
+                      DataCell(Text('Error: $err')),
+                      DataCell(const SizedBox()),
+                      DataCell(const SizedBox()),
+                      DataCell(const SizedBox()),
+                      DataCell(const SizedBox()),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],

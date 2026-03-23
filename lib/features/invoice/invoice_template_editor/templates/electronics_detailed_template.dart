@@ -29,7 +29,7 @@ class ElectronicsDetailedTemplate extends InvoiceTemplate {
   @override
   pw.Document buildPdf(InvoiceData data) {
     final pdf = pw.Document();
-    final accentColor = PdfColor.fromInt(data.themeColor.value);
+    final accentColor = PdfColor.fromInt(data.themeColor.toARGB32());
 
     // Load logo if available
     pw.MemoryImage? logoImage;

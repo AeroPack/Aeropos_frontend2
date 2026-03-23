@@ -66,7 +66,7 @@ class CompanyPickerScreen extends ConsumerWidget {
                         child: ListView.separated(
                           shrinkWrap: true,
                           itemCount: companies.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             return _CompanyCard(
                               company: companies[index],
@@ -158,7 +158,7 @@ class _CompanyCard extends StatelessWidget {
                         child: Image.network(
                           company.logoUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildInitial(context),
+                          errorBuilder: (context, error, stackTrace) => _buildInitial(context),
                         ),
                       )
                     : _buildInitial(context),

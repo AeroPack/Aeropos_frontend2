@@ -37,8 +37,9 @@ class ReportScreen extends StatelessWidget {
                 int crossAxisCount = 2; 
                 if (constraints.maxWidth > 1100) {
                   crossAxisCount = 4;
-                } else if (constraints.maxWidth > 600) crossAxisCount = 3; 
-
+                } else if (constraints.maxWidth > 600) {
+                  crossAxisCount = 3;
+                }
                 double childAspectRatio = constraints.maxWidth > 600 ? 1.5 : 1.2;
 
                 return GridView.count(

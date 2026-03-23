@@ -10,7 +10,7 @@ enum InvoiceLayout {
   classic,
   luxury,
   stylish,
-  advanced_gst,
+  advancedGst,
   simple,
   dreams,
   custom,

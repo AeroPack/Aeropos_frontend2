@@ -13,6 +13,7 @@ final companiesProvider = FutureProvider<List<Company>>((ref) async {
     final authRepo = ServiceLocator.instance.authRepository;
     return await authRepo.getMyCompanies();
   } catch (e) {
+    // ignore: avoid_print
     print('Error fetching companies: $e');
     return [];
   }
@@ -44,10 +45,14 @@ class CompanySwitcher extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -102,8 +107,12 @@ class CompanySwitcher extends ConsumerWidget {
                     height: 32,
                     decoration: BoxDecoration(
                       color: isCurrent
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.15)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
@@ -128,16 +137,22 @@ class CompanySwitcher extends ConsumerWidget {
                       children: [
                         Text(
                           company.businessName,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontWeight: isCurrent
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
                         ),
                         if (company.role != null)
                           Text(
                             company.role!,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                       ],
                     ),
@@ -163,7 +178,7 @@ class CompanySwitcher extends ConsumerWidget {
         height: 24,
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, s) => const SizedBox.shrink(),
     );
   }
 
@@ -187,7 +202,9 @@ class CompanySwitcher extends ConsumerWidget {
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              ref.read(authControllerProvider.notifier).switchCompany(company.id);
+              ref
+                  .read(authControllerProvider.notifier)
+                  .switchCompany(company.id);
             },
             child: const Text('Switch'),
           ),

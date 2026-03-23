@@ -117,7 +117,7 @@ class SyncService {
     try {
       await push();
       await pull();
-    } catch (e) {
+    } on Object catch (_) {
     } finally {
       _isSyncing = false;
     }
@@ -250,7 +250,6 @@ class SyncService {
     _isSyncing = true;
 
     try {
-
       // Step 1: Clear all local data
       await db.clearAllData();
 
@@ -259,8 +258,7 @@ class SyncService {
 
       return true;
     } catch (e) {
-      if (e is DioException) {
-      }
+      if (e is DioException) {}
       return false;
     } finally {
       _isSyncing = false;
@@ -280,7 +278,6 @@ class SyncService {
 
       var lastSyncTime = await _getLastSyncTime();
 
-
       final response = await dio.post(
         'api/sync',
         data: {'lastSyncTime': lastSyncTime?.toIso8601String()},
@@ -292,16 +289,14 @@ class SyncService {
         if (updates != null) {
           // Log specific table counts
           updates.forEach((key, value) {
-            if (value is List) {
-            }
+            if (value is List) {}
           });
           await _applyUpdates(updates);
         }
         await _updateLastSyncTime(DateTime.now());
       }
     } catch (e) {
-      if (e is DioException) {
-      }
+      if (e is DioException) {}
     }
   }
 
@@ -309,7 +304,6 @@ class SyncService {
   /// Useful for initial loads or when you need to fetch all historical data
   Future<void> forcePull() async {
     try {
-
       final response = await dio.post(
         'api/sync',
         data: {
@@ -323,8 +317,7 @@ class SyncService {
         if (updates != null) {
           // Log specific table counts
           updates.forEach((key, value) {
-            if (value is List) {
-            }
+            if (value is List) {}
           });
           await _applyUpdates(updates);
         }
@@ -332,8 +325,7 @@ class SyncService {
         await _updateLastSyncTime(DateTime.now());
       }
     } catch (e) {
-      if (e is DioException) {
-      }
+      if (e is DioException) {}
       rethrow; // Re-throw to allow caller to handle
     }
   }
@@ -667,10 +659,8 @@ class SyncService {
         } else if (e.response?.statusCode == 500) {
         } else if (e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout) {
-        } else if (e.type == DioExceptionType.connectionError) {
-        }
-        if (e.response?.data != null) {
-          }
+        } else if (e.type == DioExceptionType.connectionError) {}
+        if (e.response?.data != null) {}
       }
       return false; // Return false instead of rethrowing
     }
@@ -723,8 +713,7 @@ class SyncService {
           } catch (e) {
             // If it's a UNIQUE constraint error (like SKU or UUID conflict), log it but continue
             if (e.toString().contains('UNIQUE constraint failed')) {
-            } else {
-            }
+            } else {}
           }
         }
       }
@@ -768,7 +757,6 @@ class SyncService {
               updatedAt: Value(DateTime.now()),
             ),
           );
-    } catch (e) {
-    }
+    } on Object catch (_) {}
   }
 }

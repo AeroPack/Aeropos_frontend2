@@ -79,7 +79,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20),
             ],
           ),
           child: SingleChildScrollView(

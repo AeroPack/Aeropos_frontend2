@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart';
 import 'package:ezo/core/di/service_locator.dart';
@@ -45,9 +46,32 @@ class SalesHistoryState {
 class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
   SalesHistoryNotifier() : super(const SalesHistoryState()) {
     loadInitial();
+    _listenToChanges();
   }
 
   final _db = ServiceLocator.instance.database;
+  StreamSubscription? _subscription;
+
+  int get _tenantId => ServiceLocator.instance.tenantService.tenantId;
+
+  void _listenToChanges() {
+    _subscription?.cancel();
+    // Use customSelect to watch relevant tables for reactivity
+    final trigger = _db.selectOnly(_db.invoices)
+      ..addColumns([_db.invoices.id])
+      ..limit(1);
+
+    _subscription = trigger.watch().listen((_) {
+      // Silent refresh
+      _loadData(fetchCount: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   Future<void> loadInitial() async {
     state = state.copyWith(isLoading: true, page: 0, items: [], totalItems: 0);
@@ -75,17 +99,28 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
     try {
       final offset = state.page * state.limit;
 
+      // ignore: avoid_print
+      print(
+        'SalesHistoryNotifier: _tenantId=$_tenantId, page=${state.page}, limit=${state.limit}',
+      );
+
       // Fetch items
       final newItems = await _db.getInvoiceItemsDetailedPaginated(
         limit: state.limit,
         offset: offset,
-        queryStr: state.query,
+        queryStr: state.query.isEmpty ? null : state.query,
+        tenantId: _tenantId,
       );
+
+      // ignore: avoid_print
+      print('SalesHistoryNotifier: got ${newItems.length} items');
 
       int totalItems = state.totalItems;
       if (fetchCount) {
-        // We added getInvoiceItemsCount to AppDatabase
-        totalItems = await _db.getInvoiceItemsCount(queryStr: state.query);
+        totalItems = await _db.getInvoiceItemsCount(
+          queryStr: state.query.isEmpty ? null : state.query,
+          tenantId: _tenantId,
+        );
       }
 
       // Calculate hasMore based on total count
@@ -99,6 +134,8 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
         totalItems: totalItems,
       );
     } catch (e) {
+      // ignore: avoid_print
+      print('SalesHistoryNotifier _loadData error: $e');
       state = state.copyWith(isLoading: false, hasMore: false);
     }
   }
