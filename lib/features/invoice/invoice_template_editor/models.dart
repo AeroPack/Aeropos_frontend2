@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 // --- Models ---
 
@@ -65,6 +66,7 @@ class InvoiceData {
   bool showClientContact;
   bool showNotes;
   String? logoPath;
+  Uint8List? logoBytes;
   String? paymentMethod;
 
   InvoiceData({
@@ -89,6 +91,7 @@ class InvoiceData {
     this.showClientContact = false,
     this.showNotes = true,
     this.logoPath,
+    this.logoBytes,
     this.paymentMethod,
   });
 

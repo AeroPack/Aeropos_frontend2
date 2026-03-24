@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import 'template_engine/invoice_template.dart';
 import 'template_engine/template_registry.dart';
 import 'template_repository.dart';
 import 'package:ezo/core/providers/tenant_provider.dart';
+import 'package:ezo/core/di/service_locator.dart';
 
 class Debouncer {
   final int milliseconds;
@@ -117,6 +119,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   late List<InvoiceItem> items;
   late String notes;
   String? logoPath;
+  Uint8List? logoBytes;
   late int thermalWidth;
   late bool showTaxBreakdown;
   late bool showLogo;
@@ -184,6 +187,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final tenantId = ref.read(tenantIdProvider);
     final repo = ref.read(invoiceTemplateRepositoryProvider);
 
+    Map<String, dynamic>? profile;
+    try {
+      final profileRepo = ServiceLocator.instance.profileRepository;
+      profile = await profileRepo.getProfile();
+    } catch (e) {
+      profile = null;
+    }
+
     try {
       final data = await repo.getHydratedInvoiceData(
         tenantId,
@@ -195,11 +206,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           activeTemplate = TemplateRegistry.getTemplateById(
             widget.templateId ?? 'default_a4',
           );
-          businessName = data.businessName;
-          businessEmail = data.businessEmail;
-          businessPhone = data.businessPhone;
-          businessAddress = data.businessAddress;
-          gstin = data.gstin;
+
+          businessName = data.businessName.isNotEmpty
+              ? data.businessName
+              : (profile?['businessName'] ??
+                    profile?['companyName'] ??
+                    'Your Business');
+          businessEmail = data.businessEmail.isNotEmpty
+              ? data.businessEmail
+              : (profile?['email'] ?? '');
+          businessPhone = data.businessPhone.isNotEmpty
+              ? data.businessPhone
+              : (profile?['phone'] ?? '');
+          businessAddress = data.businessAddress.isNotEmpty
+              ? data.businessAddress
+              : (profile?['address'] ?? '');
+          gstin = data.gstin.isNotEmpty
+              ? data.gstin
+              : (profile?['taxId'] ?? '');
           clientName = data.clientName;
           clientAddress = data.clientAddress;
           taxLabel = data.taxLabel;
@@ -209,7 +233,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           items = data.items;
           notes = data.notes;
           isThermal = data.isThermal;
-          logoPath = data.logoPath;
+          logoPath =
+              data.logoPath ??
+              (profile?['logoUrl'] ??
+                  profile?['imageUrl'] ??
+                  profile?['profileImage']);
           thermalWidth = data.thermalWidth;
           showTaxBreakdown = data.showTaxBreakdown;
           showLogo = data.showLogo;
@@ -217,7 +245,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           showClientContact = data.showClientContact;
           showNotes = data.showNotes;
 
-          // Initialize controllers
           _businessNameController.text = businessName;
           _businessEmailController.text = businessEmail;
           _businessPhoneController.text = businessPhone;
@@ -229,7 +256,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           _taxRateController.text = taxRate.toString();
           _taxLabelController.text = taxLabel;
 
-          // Initialize item controllers
           for (var item in items) {
             _itemDescControllers[item.id] = TextEditingController(
               text: item.desc,
@@ -337,9 +363,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
+      final bytes = await image.readAsBytes();
       setState(() {
         logoPath = image.path;
+        logoBytes = bytes;
       });
+
+      try {
+        final profileRepo = ServiceLocator.instance.profileRepository;
+        await profileRepo.updateProfile({}, imageFile: File(image.path));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Logo uploaded successfully!')),
+          );
+        }
+      } catch (e) {
+        debugPrint('Failed to upload logo to profile: $e');
+      }
     }
   }
 
@@ -365,9 +405,36 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         showFooter: showNotes,
       );
 
+      try {
+        final profileRepo = ServiceLocator.instance.profileRepository;
+        final profileData = <String, dynamic>{};
+
+        if (businessName.isNotEmpty) {
+          profileData['businessName'] = businessName;
+        }
+        if (businessEmail.isNotEmpty) {
+          profileData['email'] = businessEmail;
+        }
+        if (businessPhone.isNotEmpty) {
+          profileData['phone'] = businessPhone;
+        }
+        if (businessAddress.isNotEmpty) {
+          profileData['address'] = businessAddress;
+        }
+        if (gstin.isNotEmpty) {
+          profileData['taxId'] = gstin;
+        }
+
+        if (profileData.isNotEmpty) {
+          await profileRepo.updateProfile(profileData);
+        }
+      } catch (e) {
+        debugPrint('Failed to sync business details to profile: $e');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Template settings linked and saved!')),
+          const SnackBar(content: Text('Template and business details saved!')),
         );
       }
     } catch (e) {
@@ -411,6 +478,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         notes: notes,
         isThermal: isThermal,
         logoPath: logoPath,
+        logoBytes: logoBytes,
         thermalWidth: thermalWidth,
         showTaxBreakdown: showTaxBreakdown,
         showLogo: showLogo,
@@ -710,10 +778,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                           ? Stack(
                               children: [
                                 Center(
-                                  child: Image.file(
-                                    File(logoPath!),
-                                    height: 60,
-                                  ),
+                                  child: logoBytes != null
+                                      ? Image.memory(logoBytes!, height: 60)
+                                      : (kIsWeb && logoPath != null
+                                            ? Image.network(
+                                                logoPath!,
+                                                height: 60,
+                                              )
+                                            : const SizedBox()),
                                 ),
                                 Positioned(
                                   right: 0,
@@ -721,7 +793,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                                   child: IconButton(
                                     icon: const Icon(Icons.close, size: 16),
                                     onPressed: () {
-                                      setState(() => logoPath = null);
+                                      setState(() {
+                                        logoPath = null;
+                                        logoBytes = null;
+                                      });
                                     },
                                   ),
                                 ),
@@ -1351,9 +1426,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               padding: EdgeInsets.all(isThermal ? 24 : 48),
               child: Theme(
                 data: Theme.of(context).copyWith(
-                  textTheme: Theme.of(context).textTheme.apply(
-                        fontFamily: _getFontFamily(fontFamily),
-                      ),
+                  textTheme: Theme.of(
+                    context,
+                  ).textTheme.apply(fontFamily: _getFontFamily(fontFamily)),
                 ),
                 child: DefaultTextStyle.merge(
                   style: TextStyle(fontFamily: _getFontFamily(fontFamily)),
@@ -1384,6 +1459,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       notes: notes,
                       isThermal: isThermal,
                       logoPath: logoPath,
+                      logoBytes: logoBytes,
                       thermalWidth: thermalWidth,
                       showTaxBreakdown: showTaxBreakdown,
                       showLogo: showLogo,

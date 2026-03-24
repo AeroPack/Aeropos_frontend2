@@ -93,7 +93,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   void _loadProfileData(Map<String, dynamic>? profile) {
     if (profile == null || !mounted) return;
 
-
     // Update text controllers with profile data
     _nameController.text = profile['name'] ?? '';
     _companyNameController.text =
@@ -115,8 +114,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       }
     }
 
-    // Update profile image URL
-    _profileImageUrl = profile['profileImage'] ?? profile['imageUrl'];
+    // Update profile image URL (explicitly use userImage from repo)
+    _profileImageUrl = profile['userImage'];
 
     // Mark as loaded
     _isProfileLoaded = true;
@@ -125,7 +124,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     if (mounted) {
       setState(() {});
     }
-
   }
 
   Future<void> _saveProfile() async {
@@ -162,7 +160,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
       final success = await ref
           .read(profileControllerProvider.notifier)
-          .updateProfile(profileData, imageFile: _selectedImage);
+          .updateProfile(
+            profileData,
+            imageFile: _selectedImage,
+            imageBytes: _imageBytes,
+            uploadType: 'avatar',
+          );
 
       if (mounted) {
         if (success) {
@@ -207,7 +210,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         _loadProfileData(profileState.profile);
       });
     }
-
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB), // Light grey background from UI

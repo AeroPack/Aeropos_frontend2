@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../core/models/invoice.dart';
@@ -14,13 +15,37 @@ class ThermalLayout {
   ) async {
     final pdf = pw.Document();
 
+    final logoPath = profile?['logoPath'] as String?;
+
+    pw.ImageProvider? logoImage;
+    if (logoPath != null && logoPath.isNotEmpty) {
+      try {
+        final response = await http.get(Uri.parse(logoPath));
+        if (response.statusCode == 200) {
+          logoImage = pw.MemoryImage(response.bodyBytes);
+        }
+      } catch (e) {
+        logoImage = null;
+      }
+    }
+
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.roll80, // Standard 80mm thermal
+        pageFormat: PdfPageFormat.roll80,
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              if (template.showLogo && logoImage != null)
+                pw.Center(
+                  child: pw.Container(
+                    width: 50,
+                    height: 50,
+                    child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                  ),
+                ),
+              if (template.showLogo && logoImage != null)
+                pw.SizedBox(height: 10),
               pw.Center(
                 child: pw.Text(
                   (profile?['businessName'] ??

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../domain/repositories/profile_repository.dart';
@@ -43,10 +44,17 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<bool> updateProfile(
     Map<String, dynamic> data, {
     File? imageFile,
+    Uint8List? imageBytes,
+    String? uploadType,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      await _repository.updateProfile(data, imageFile: imageFile);
+      await _repository.updateProfile(
+        data,
+        imageFile: imageFile,
+        imageBytes: imageBytes,
+        uploadType: uploadType,
+      );
       // Reload profile after update
       await loadProfile();
       return true;
@@ -58,6 +66,6 @@ class ProfileController extends StateNotifier<ProfileState> {
 }
 
 final profileControllerProvider =
-    StateNotifierProvider.autoDispose<ProfileController, ProfileState>((ref) {
+    StateNotifierProvider<ProfileController, ProfileState>((ref) {
       return ProfileController(ServiceLocator.instance.profileRepository);
     });

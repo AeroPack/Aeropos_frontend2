@@ -29,6 +29,7 @@ class InvoiceTemplate {
   final bool showAddress;
   final bool showCustomerDetails;
   final bool showFooter;
+  final bool showLogo;
 
   // Custom Template Configuration
   final String? customConfig;
@@ -42,6 +43,7 @@ class InvoiceTemplate {
     this.showAddress = true,
     this.showCustomerDetails = true,
     this.showFooter = true,
+    this.showLogo = true,
     this.customConfig,
   });
 
@@ -62,6 +64,7 @@ class InvoiceTemplate {
       showAddress: entity.showAddress,
       showCustomerDetails: entity.showCustomerDetails,
       showFooter: entity.showFooter,
+      showLogo: entity.showLogo,
       customConfig: entity.customConfig,
     );
   }

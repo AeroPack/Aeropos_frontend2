@@ -96,8 +96,8 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
     _phoneController.text = profile['companyPhone'] ?? '';
     _emailController.text = profile['companyEmail'] ?? '';
 
-    // Update profile image URL (Logo)
-    _profileImageUrl = profile['profileImage'] ?? profile['imageUrl'];
+    // Update profile image URL (Logo) - Use logoUrl prioritized for company profile
+    _profileImageUrl = profile['logoUrl'] ?? profile['profileImage'] ?? profile['imageUrl'];
     // Force rebuild only if not already rebuilding (safety check, though ref.listen runs post-build usually)
     setState(() {});
   }
@@ -115,7 +115,12 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
 
       final success = await ref
           .read(profileControllerProvider.notifier)
-          .updateProfile(profileData, imageFile: _selectedImage);
+          .updateProfile(
+            profileData,
+            imageFile: _selectedImage,
+            imageBytes: _imageBytes,
+            uploadType: 'logo',
+          );
 
       if (mounted) {
         if (success) {

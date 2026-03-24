@@ -11,27 +11,42 @@ import '../models/sale.dart';
 import '../models/invoice.dart';
 import '../models/invoice_template.dart';
 import '../database/app_database.dart';
-import '../../features/profile/domain/repositories/profile_repository.dart';
 import '../di/service_locator.dart';
+import '../services/tenant_service.dart';
 
 class InvoiceService {
-  final ProfileRepository _profileRepository;
+  final AppDatabase _db;
+  final TenantService _tenantService;
 
   InvoiceService()
-    : _profileRepository = ServiceLocator.instance.profileRepository;
+    : _db = ServiceLocator.instance.database,
+      _tenantService = ServiceLocator.instance.tenantService;
+
   Future<pw.Document> generateInvoicePdf(
     Invoice invoice,
     CustomerEntity? customer,
     InvoiceTemplate template,
   ) async {
-    // Fetch profile data for business details
     Map<String, dynamic>? profile;
     try {
-      profile = await _profileRepository.getProfile();
+      final profileRepo = ServiceLocator.instance.profileRepository;
+      profile = await profileRepo.getProfile();
     } catch (e) {
-      // If profile fetch fails, continue with null profile
       profile = null;
     }
+
+    final tenantId = _tenantService.tenantId;
+    final settings = await (_db.select(
+      _db.invoiceSettings,
+    )..where((t) => t.tenantId.equals(tenantId))).getSingleOrNull();
+
+    final logoPath =
+        settings?.logoPath ??
+        profile?['logoUrl'] ??
+        profile?['imageUrl'] ??
+        profile?['profileImage'];
+
+    final mergedProfile = {...?profile, 'logoPath': logoPath};
 
     switch (template.layout) {
       case InvoiceLayout.modern:
@@ -39,58 +54,57 @@ class InvoiceService {
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.classic:
         return await ClassicLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.luxury:
         return await LuxuryLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.stylish:
         return await StylishLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.simple:
         return await SimpleLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.advancedGst:
         return await AdvancedGstLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.dreams:
         return await DreamsLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
       case InvoiceLayout.thermal:
       case InvoiceLayout.custom:
-        // Custom layout uses a different API, fallback to thermal for now
         return await ThermalLayout.generate(
           invoice,
           customer,
           template,
-          profile,
+          mergedProfile,
         );
     }
   }

@@ -46,7 +46,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final isLoggedIn = authState.status == AuthStatus.authenticated;
-      final isCompanySelection = authState.status == AuthStatus.companySelection;
+      final isCompanySelection =
+          authState.status == AuthStatus.companySelection;
       final isPublicRoute =
           state.uri.path == '/login' ||
           state.uri.path == '/signup' ||
@@ -274,10 +275,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/profile',
                 builder: (context, state) => const UserProfileScreen(),
-              ),
-              GoRoute(
-                path: '/my-companies',
-                builder: (context, state) => const MyCompaniesScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'companies',
+                    builder: (context, state) => const MyCompaniesScreen(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -303,7 +306,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       GoRoute(path: '/pos', builder: (context, state) => const PosScreen()),
-      
+
       // Full screen route for Invoice Template Editor (outside AppShell)
       GoRoute(
         path: '/invoice-templates',

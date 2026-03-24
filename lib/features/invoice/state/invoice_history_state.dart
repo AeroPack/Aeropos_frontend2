@@ -56,9 +56,10 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
 
   void _listenToChanges() {
     _subscription?.cancel();
-    // Use customSelect to watch relevant tables for reactivity
-    final trigger = _db.selectOnly(_db.invoices)
-      ..addColumns([_db.invoices.id])
+    // Watch the latest invoice to trigger refresh on new inserts
+    // Ordering by descending ID guarantees the result changes on insert, circumventing Drift's stream deduplication.
+    final trigger = _db.select(_db.invoices)
+      ..orderBy([(t) => OrderingTerm.desc(t.id)])
       ..limit(1);
 
     _subscription = trigger.watch().listen((_) {

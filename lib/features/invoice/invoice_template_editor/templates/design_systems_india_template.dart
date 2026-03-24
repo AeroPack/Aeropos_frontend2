@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -31,10 +30,9 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
     final pdf = pw.Document();
     final accentColor = PdfColor.fromInt(data.themeColor.toARGB32());
 
-    // Load logo if available
     pw.MemoryImage? logoImage;
-    if (data.logoPath != null && File(data.logoPath!).existsSync()) {
-      logoImage = pw.MemoryImage(File(data.logoPath!).readAsBytesSync());
+    if (data.showLogo && data.logoBytes != null) {
+      logoImage = pw.MemoryImage(data.logoBytes!);
     }
 
     pdf.addPage(
@@ -77,53 +75,94 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                             ),
                             pw.SizedBox(height: 8),
                             if (data.showBusinessAddress)
-                              pw.Text(data.businessAddress, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
-                            pw.Text(data.businessPhone, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                              pw.Text(
+                                data.businessAddress,
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey600,
+                                ),
+                              ),
+                            pw.Text(
+                              data.businessPhone,
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey600,
+                              ),
+                            ),
                           ],
                         ),
                       ],
                     ),
                   ),
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     color: accentColor,
                     child: pw.Text(
                       'INVOICE',
                       style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 26),
+                        color: PdfColors.white,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 26,
+                      ),
                     ),
                   ),
                 ],
               ),
-              
+
               pw.SizedBox(height: 48),
-              
+
               // Client and Meta Row
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Expanded(
-                    child: data.showClientContact 
-                      ? pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('CLIENT', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: accentColor)),
-                            pw.SizedBox(height: 8),
-                            pw.Text(data.clientName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
-                            pw.Text(data.clientAddress, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                          ],
-                        )
-                      : pw.SizedBox(),
+                    child: data.showClientContact
+                        ? pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
+                                'CLIENT',
+                                style: pw.TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: accentColor,
+                                ),
+                              ),
+                              pw.SizedBox(height: 8),
+                              pw.Text(
+                                data.clientName,
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              pw.Text(
+                                data.clientAddress,
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey700,
+                                ),
+                              ),
+                            ],
+                          )
+                        : pw.SizedBox(),
                   ),
                   pw.Expanded(
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        _pdfMetaRow('DATE:', '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}'),
+                        _pdfMetaRow(
+                          'DATE:',
+                          '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+                        ),
                         if (data.paymentMethod != null)
-                          _pdfMetaRow('PAYMENT:', data.paymentMethod!.toUpperCase()),
+                          _pdfMetaRow(
+                            'PAYMENT:',
+                            data.paymentMethod!.toUpperCase(),
+                          ),
                         _pdfMetaRow('INVOICE #:', 'DS-2024-001'),
                         _pdfMetaRow('DUE DATE:', 'Next 30 Days'),
                       ],
@@ -133,13 +172,19 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
               ),
 
               pw.SizedBox(height: 40),
-              
+
               // Items Table
               pw.Table(
-                border: pw.TableBorder(bottom: pw.BorderSide(color: accentColor, width: 2)),
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: accentColor, width: 2),
+                ),
                 children: [
                   pw.TableRow(
-                    decoration: pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: accentColor, width: 2))),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border(
+                        bottom: pw.BorderSide(color: accentColor, width: 2),
+                      ),
+                    ),
                     children: [
                       _pdfHeaderCell('DESCRIPTION', pw.TextAlign.left),
                       _pdfHeaderCell('QTY', pw.TextAlign.center),
@@ -147,22 +192,37 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                       _pdfHeaderCell('AMOUNT', pw.TextAlign.right),
                     ],
                   ),
-                  ...data.items.map((item) => pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(vertical: 10),
-                        child: pw.Text(item.desc, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                      ),
-                      _pdfDataCell(item.qty.toString(), pw.TextAlign.center),
-                      _pdfDataCell(item.rate.toStringAsFixed(0), pw.TextAlign.right),
-                      _pdfDataCell(item.amount.toStringAsFixed(0), pw.TextAlign.right, isBold: true),
-                    ],
-                  )),
+                  ...data.items.map(
+                    (item) => pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 10),
+                          child: pw.Text(
+                            item.desc,
+                            style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        _pdfDataCell(item.qty.toString(), pw.TextAlign.center),
+                        _pdfDataCell(
+                          item.rate.toStringAsFixed(0),
+                          pw.TextAlign.right,
+                        ),
+                        _pdfDataCell(
+                          item.amount.toStringAsFixed(0),
+                          pw.TextAlign.right,
+                          isBold: true,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              
+
               pw.SizedBox(height: 32),
-              
+
               // Totals Table
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.end,
@@ -171,14 +231,27 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                     width: 200,
                     child: pw.Column(
                       children: [
-                        _pdfTotalRow('Subtotal', data.subtotal.toStringAsFixed(0)),
+                        _pdfTotalRow(
+                          'Subtotal',
+                          data.subtotal.toStringAsFixed(0),
+                        ),
                         pw.SizedBox(height: 8),
-                        if (data.showTaxBreakdown && data.taxLabel.toUpperCase() == 'GST') ...[
-                          _pdfTotalRow('SGST (${(data.taxRate / 2)}%)', (data.taxAmount / 2).toStringAsFixed(0)),
+                        if (data.showTaxBreakdown &&
+                            data.taxLabel.toUpperCase() == 'GST') ...[
+                          _pdfTotalRow(
+                            'SGST (${(data.taxRate / 2)}%)',
+                            (data.taxAmount / 2).toStringAsFixed(0),
+                          ),
                           pw.SizedBox(height: 4),
-                          _pdfTotalRow('CGST (${(data.taxRate / 2)}%)', (data.taxAmount / 2).toStringAsFixed(0)),
+                          _pdfTotalRow(
+                            'CGST (${(data.taxRate / 2)}%)',
+                            (data.taxAmount / 2).toStringAsFixed(0),
+                          ),
                         ] else ...[
-                          _pdfTotalRow('${data.taxLabel} (${data.taxRate}%)', data.taxAmount.toStringAsFixed(0)),
+                          _pdfTotalRow(
+                            '${data.taxLabel} (${data.taxRate}%)',
+                            data.taxAmount.toStringAsFixed(0),
+                          ),
                         ],
                         pw.SizedBox(height: 4),
                         pw.Divider(thickness: 1, color: accentColor),
@@ -186,9 +259,21 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text('TOTAL', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-                            pw.Text('₹${data.total.toStringAsFixed(0)}', 
-                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18, color: accentColor)),
+                            pw.Text(
+                              'TOTAL',
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            pw.Text(
+                              '₹${data.total.toStringAsFixed(0)}',
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 18,
+                                color: accentColor,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -207,13 +292,36 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('PAYMENT INFORMATION', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey500)),
-                      pw.Text('Bank: State Bank of India', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('A/C No: 9928172615', style: const pw.TextStyle(fontSize: 9)),
-                      pw.Text('IFSC: SBIN00291', style: const pw.TextStyle(fontSize: 9)),
+                      pw.Text(
+                        'PAYMENT INFORMATION',
+                        style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey500,
+                        ),
+                      ),
+                      pw.Text(
+                        'Bank: State Bank of India',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.Text(
+                        'A/C No: 9928172615',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.Text(
+                        'IFSC: SBIN00291',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ],
                   ),
-                  pw.Text('Thank you for your business!', style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+                  pw.Text(
+                    'Thank you for your business!',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontStyle: pw.FontStyle.italic,
+                      color: PdfColors.grey600,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -230,7 +338,10 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.end,
         children: [
-          pw.Text(label, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+          ),
           pw.SizedBox(width: 8),
           pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
         ],
@@ -241,14 +352,29 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
   pw.Widget _pdfHeaderCell(String label, pw.TextAlign align) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 8),
-      child: pw.Text(label, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold), textAlign: align),
+      child: pw.Text(
+        label,
+        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+        textAlign: align,
+      ),
     );
   }
 
-  pw.Widget _pdfDataCell(String value, pw.TextAlign align, {bool isBold = false}) {
+  pw.Widget _pdfDataCell(
+    String value,
+    pw.TextAlign align, {
+    bool isBold = false,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 10),
-      child: pw.Text(value, style: pw.TextStyle(fontSize: 10, fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal), textAlign: align),
+      child: pw.Text(
+        value,
+        style: pw.TextStyle(
+          fontSize: 10,
+          fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+        textAlign: align,
+      ),
     );
   }
 
@@ -256,7 +382,10 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        pw.Text(label, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+        pw.Text(
+          label,
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+        ),
         pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
       ],
     );
@@ -274,11 +403,10 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (data.showLogo) ...[
-                    if (data.logoPath != null && File(data.logoPath!).existsSync()) ...[
-                      Image.file(File(data.logoPath!), height: 50, width: 50),
-                      const SizedBox(width: 12),
-                    ],
+                  if (data.showLogo &&
+                      (data.logoBytes != null || data.logoPath != null)) ...[
+                    buildLogoWidget(data, size: 50),
+                    const SizedBox(width: 12),
                   ],
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,10 +422,20 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                       ),
                       const SizedBox(height: 8),
                       if (data.showBusinessAddress)
-                        Text(data.businessAddress,
-                            style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                      Text(data.businessPhone,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        Text(
+                          data.businessAddress,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      Text(
+                        data.businessPhone,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -309,9 +447,10 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
               child: const Text(
                 'INVOICE',
                 style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
               ),
             ),
           ],
@@ -320,24 +459,36 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
         Row(
           children: [
             Expanded(
-              child: data.showClientContact 
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('CLIENT',
+              child: data.showClientContact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'CLIENT',
                           style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: data.themeColor)),
-                      const SizedBox(height: 8),
-                      Text(data.clientName,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: data.themeColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          data.clientName,
                           style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.bold)),
-                      Text(data.clientAddress,
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  )
-                : const SizedBox(),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          data.clientAddress,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox(),
             ),
             Expanded(
               child: Column(
@@ -346,22 +497,46 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Text('DATE: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                      Text('${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}', style: const TextStyle(fontSize: 11)),
+                      const Text(
+                        'DATE: ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                      Text(
+                        '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ],
                   ),
                   if (data.paymentMethod != null)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text('PAYMENT: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                        Text(data.paymentMethod!.toUpperCase(), style: const TextStyle(fontSize: 11)),
+                        const Text(
+                          'PAYMENT: ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          data.paymentMethod!.toUpperCase(),
+                          style: const TextStyle(fontSize: 11),
+                        ),
                       ],
                     ),
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text('INVOICE #: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      Text(
+                        'INVOICE #: ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
                       Text('DS-2024-001', style: TextStyle(fontSize: 11)),
                     ],
                   ),
@@ -381,69 +556,98 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
           children: [
             TableRow(
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: data.themeColor, width: 2)),
+                border: Border(
+                  bottom: BorderSide(color: data.themeColor, width: 2),
+                ),
               ),
               children: const [
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('DESCRIPTION',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('QTY',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                      textAlign: TextAlign.center),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('RATE',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                      textAlign: TextAlign.right),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('AMOUNT',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                      textAlign: TextAlign.right),
-                ),
-              ],
-            ),
-            ...data.items.map((item) => TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.desc, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(item.details, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                    ],
+                  child: Text(
+                    'DESCRIPTION',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(item.qty.toString(), textAlign: TextAlign.center),
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'QTY',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(item.rate.toStringAsFixed(0), textAlign: TextAlign.right),
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'RATE',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    textAlign: TextAlign.right,
+                  ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(item.amount.toStringAsFixed(0),
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'AMOUNT',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    textAlign: TextAlign.right,
+                  ),
                 ),
               ],
-            )),
+            ),
+            ...data.items.map(
+              (item) => TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.desc,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          item.details,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      item.qty.toString(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      item.rate.toStringAsFixed(0),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      item.amount.toStringAsFixed(0),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 32),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-             Table(
+            Table(
               columnWidths: const {
                 0: FixedColumnWidth(100),
                 1: FixedColumnWidth(100),
@@ -451,37 +655,95 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
               children: [
                 TableRow(
                   children: [
-                    const Padding(padding: EdgeInsets.all(4), child: Text('Subtotal')),
-                    Padding(padding: const EdgeInsets.all(4), child: Text(data.subtotal.toStringAsFixed(0), textAlign: TextAlign.right)),
+                    const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Text('Subtotal'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Text(
+                        data.subtotal.toStringAsFixed(0),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
                   ],
                 ),
-                if (data.showTaxBreakdown && data.taxLabel.toUpperCase() == 'GST') ...[
+                if (data.showTaxBreakdown &&
+                    data.taxLabel.toUpperCase() == 'GST') ...[
                   TableRow(
                     children: [
-                      Padding(padding: const EdgeInsets.all(4), child: Text('SGST (${(data.taxRate / 2).toStringAsFixed(1)}%)')),
-                      Padding(padding: const EdgeInsets.all(4), child: Text((data.taxAmount / 2).toStringAsFixed(0), textAlign: TextAlign.right)),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'SGST (${(data.taxRate / 2).toStringAsFixed(1)}%)',
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          (data.taxAmount / 2).toStringAsFixed(0),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                   TableRow(
                     children: [
-                      Padding(padding: const EdgeInsets.all(4), child: Text('CGST (${(data.taxRate / 2).toStringAsFixed(1)}%)')),
-                      Padding(padding: const EdgeInsets.all(4), child: Text((data.taxAmount / 2).toStringAsFixed(0), textAlign: TextAlign.right)),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'CGST (${(data.taxRate / 2).toStringAsFixed(1)}%)',
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          (data.taxAmount / 2).toStringAsFixed(0),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                 ] else
                   TableRow(
                     children: [
-                      Padding(padding: const EdgeInsets.all(4), child: Text('${data.taxLabel} (${data.taxRate}%)')),
-                      Padding(padding: const EdgeInsets.all(4), child: Text(data.taxAmount.toStringAsFixed(0), textAlign: TextAlign.right)),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text('${data.taxLabel} (${data.taxRate}%)'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          data.taxAmount.toStringAsFixed(0),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                 TableRow(
-                  decoration: BoxDecoration(color: data.themeColor.withValues(alpha: 0.05)),
+                  decoration: BoxDecoration(
+                    color: data.themeColor.withValues(alpha: 0.05),
+                  ),
                   children: [
-                    const Padding(padding: EdgeInsets.all(8), child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold))),
-                    Padding(padding: const EdgeInsets.all(8), child: Text(data.total.toStringAsFixed(0),
+                    const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text(
+                        'TOTAL',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        data.total.toStringAsFixed(0),
                         textAlign: TextAlign.right,
-                        style: TextStyle(fontWeight: FontWeight.bold, color: data.themeColor, fontSize: 16))),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: data.themeColor,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -492,9 +754,19 @@ class DesignSystemsIndiaTemplate extends InvoiceTemplate {
         if (data.showNotes && data.notes.isNotEmpty) ...[
           const Divider(),
           const SizedBox(height: 16),
-          Text('NOTES', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: data.themeColor)),
+          Text(
+            'NOTES',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: data.themeColor,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(data.notes, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          Text(
+            data.notes,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
         ],
       ],
     );
