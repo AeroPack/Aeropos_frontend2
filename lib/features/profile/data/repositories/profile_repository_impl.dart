@@ -13,6 +13,15 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   ProfileRepositoryImpl(this._client, this._storage, {required this.baseUrl});
 
+  // Helper method to build proper URLs without double slashes
+  String _buildUrl(String endpoint) {
+    String cleanBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    String cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/$endpoint';
+    return '$cleanBaseUrl$cleanEndpoint';
+  }
+
   Future<String?> _getToken() async {
     return await _storage.read(key: 'auth_token');
   }
@@ -28,7 +37,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final cachedAvatarUrl = await _storage.read(key: 'cached_avatar_url');
 
     final response = await _client.get(
-      Uri.parse('$baseUrl/api/profile'),
+      Uri.parse(_buildUrl('/api/profile')),
       headers: {'x-auth-token': token, 'Content-Type': 'application/json'},
     );
 
@@ -52,24 +61,23 @@ class ProfileRepositoryImpl implements ProfileRepository {
           'companyName': company['businessName'],
         };
 
-        // 1. User/Employee Data
-        profileData['userImage'] = cachedAvatarUrl ?? (employee['avatarUrl'] != null
-            ? (employee['avatarUrl'].toString().startsWith('/') ? '$baseUrl${employee['avatarUrl']}' : employee['avatarUrl'])
-            : null);
+        profileData['userImage'] =
+            cachedAvatarUrl ??
+            (employee['avatarUrl'] != null
+                ? _buildFullUrl(employee['avatarUrl'].toString())
+                : null);
 
-        // 2. Company Data (fallback for backward compatibility in some views)
-        profileData['logoUrl'] = cachedLogoUrl ?? (company['logoUrl'] != null
-            ? (company['logoUrl'].toString().startsWith('/') ? '$baseUrl${company['logoUrl']}' : company['logoUrl'])
-            : null);
+        profileData['logoUrl'] =
+            cachedLogoUrl ??
+            (company['logoUrl'] != null
+                ? _buildFullUrl(company['logoUrl'].toString())
+                : null);
 
-        // Keep profileImage and imageUrl as logoUrl for company profile views
         profileData['profileImage'] = profileData['logoUrl'];
         profileData['imageUrl'] = profileData['logoUrl'];
-
       } else {
         profileData = data;
-        // Apply caching and base URL logic for generic profile data if employee/company structure is not present
-        // This block ensures backward compatibility for older profile structures
+
         if (cachedLogoUrl != null && cachedLogoUrl.isNotEmpty) {
           profileData['logoUrl'] = cachedLogoUrl;
           profileData['imageUrl'] = cachedLogoUrl;
@@ -77,24 +85,25 @@ class ProfileRepositoryImpl implements ProfileRepository {
         } else {
           if (profileData['profileImage'] != null &&
               profileData['profileImage'].toString().startsWith('/')) {
-            profileData['profileImage'] =
-                '$baseUrl${profileData['profileImage']}';
+            profileData['profileImage'] = _buildFullUrl(
+              profileData['profileImage'],
+            );
           }
           if (profileData['imageUrl'] != null &&
               profileData['imageUrl'].toString().startsWith('/')) {
-            profileData['imageUrl'] = '$baseUrl${profileData['imageUrl']}';
+            profileData['imageUrl'] = _buildFullUrl(profileData['imageUrl']);
           }
           if (profileData['logoUrl'] != null &&
               profileData['logoUrl'].toString().startsWith('/')) {
-            profileData['logoUrl'] = '$baseUrl${profileData['logoUrl']}';
+            profileData['logoUrl'] = _buildFullUrl(profileData['logoUrl']);
           }
         }
-        // For generic profile, if avatar is present, handle it
+
         if (cachedAvatarUrl != null && cachedAvatarUrl.isNotEmpty) {
           profileData['userImage'] = cachedAvatarUrl;
         } else if (profileData['avatarUrl'] != null &&
             profileData['avatarUrl'].toString().startsWith('/')) {
-          profileData['userImage'] = '$baseUrl${profileData['avatarUrl']}';
+          profileData['userImage'] = _buildFullUrl(profileData['avatarUrl']);
         } else if (profileData['avatarUrl'] != null) {
           profileData['userImage'] = profileData['avatarUrl'];
         }
@@ -106,8 +115,16 @@ class ProfileRepositoryImpl implements ProfileRepository {
     }
   }
 
+  String _buildFullUrl(String path) {
+    String cleanBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    String cleanPath = path.startsWith('/') ? path : '/$path';
+    return '$cleanBaseUrl$cleanPath';
+  }
+
   @override
-  Future<void> updateProfile(
+  Future<String?> updateProfile(
     Map<String, dynamic> data, {
     File? imageFile,
     Uint8List? imageBytes,
@@ -118,10 +135,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
       throw Exception('Not authenticated');
     }
 
+    String? uploadedImageUrl;
+
     // 1. Text Update (if data provided)
     if (data.isNotEmpty) {
       final response = await _client.put(
-        Uri.parse('$baseUrl/api/profile'),
+        Uri.parse(_buildUrl('/api/profile')),
         headers: {'x-auth-token': token, 'Content-Type': 'application/json'},
         body: json.encode(data),
       );
@@ -135,22 +154,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
     if (imageFile != null || imageBytes != null) {
       final isLogo = uploadType == 'logo';
       final isAvatar = uploadType == 'avatar';
-      
-      // Determine endpoint based on uploadType
-      String endpoint = '/api/profile/upload-image'; // Default legacy
+
+      String endpoint = '/api/profile/upload-image';
       if (isLogo) endpoint = '/api/profile/upload-logo';
       if (isAvatar) endpoint = '/api/profile/upload-avatar';
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse(_buildUrl(endpoint)),
       );
 
       request.headers.addAll({'x-auth-token': token});
 
-      // Determine content type based on file extension
       String? fileName = 'image';
-      String extension = 'jpg'; // Default
+      String extension = 'jpg';
       MediaType mediaType = MediaType('image', 'jpeg');
 
       if (imageFile != null) {
@@ -158,7 +175,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
         fileName = path.split('/').last;
         extension = path.split('.').last.toLowerCase();
       } else if (imageBytes != null) {
-        // For web, we'll use a generic name
         fileName = 'image_upload.jpg';
         extension = 'jpg';
       }
@@ -171,7 +187,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
         mediaType = MediaType('image', 'webp');
       }
 
-      // Add image file with correct field name 'image' and explicit content type
       if (imageFile != null) {
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -182,7 +197,6 @@ class ProfileRepositoryImpl implements ProfileRepository {
           ),
         );
       } else if (imageBytes != null) {
-        // For web with bytes data
         request.files.add(
           http.MultipartFile.fromBytes(
             'image',
@@ -201,23 +215,23 @@ class ProfileRepositoryImpl implements ProfileRepository {
       }
 
       final responseData = json.decode(response.body);
-      String? imageUrl = responseData['imageUrl'] ?? responseData['logoUrl'];
+      uploadedImageUrl = responseData['imageUrl'] ?? responseData['logoUrl'];
 
-      if (imageUrl != null) {
-        final absoluteUrl = imageUrl.toString().startsWith('/')
-            ? '$baseUrl$imageUrl'
-            : imageUrl;
-        
-        // Cache based on what we uploaded
+      if (uploadedImageUrl != null) {
+        final absoluteUrl = uploadedImageUrl.toString().startsWith('/')
+            ? _buildFullUrl(uploadedImageUrl)
+            : uploadedImageUrl;
+
         if (uploadType == 'logo') {
           await _storage.write(key: 'cached_logo_url', value: absoluteUrl);
         } else if (uploadType == 'avatar') {
           await _storage.write(key: 'cached_avatar_url', value: absoluteUrl);
         } else {
-             // Fallback for legacy
           await _storage.write(key: 'cached_logo_url', value: absoluteUrl);
         }
       }
     }
+
+    return uploadedImageUrl;
   }
 }

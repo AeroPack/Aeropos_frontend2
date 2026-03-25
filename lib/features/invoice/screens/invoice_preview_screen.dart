@@ -11,7 +11,7 @@ import 'package:ezo/features/invoice/invoice_template_editor/template_repository
 import 'package:ezo/features/invoice/invoice_template_editor/models.dart' as editor_models;
 import 'package:ezo/core/providers/tenant_provider.dart';
 
-class InvoicePreviewScreen extends ConsumerWidget {
+class InvoicePreviewScreen extends ConsumerStatefulWidget {
   final InvoiceEntity invoiceEntity;
   final CustomerEntity? customer;
   final List<TypedResult> items;
@@ -24,48 +24,79 @@ class InvoicePreviewScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Watch the active template (synced with settings and tenant)
+  ConsumerState<InvoicePreviewScreen> createState() => _InvoicePreviewScreenState();
+}
+
+class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
+  double _zoomLevel = 0.6; // Scale factor for maxPageWidth
+
+  void _zoomIn() {
+    setState(() {
+      _zoomLevel = (_zoomLevel + 0.1).clamp(0.2, 2.0);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _zoomLevel = (_zoomLevel - 0.1).clamp(0.2, 2.0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final templateAsync = ref.watch(activeTemplateProvider);
     final tenantId = ref.watch(tenantIdProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Preview: ${invoiceEntity.invoiceNumber}"),
+        title: Text("Preview: ${widget.invoiceEntity.invoiceNumber}"),
         backgroundColor: PosColors.navy,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.zoom_out),
+            onPressed: _zoomOut,
+            tooltip: 'Zoom Out',
+          ),
+          Center(
+            child: Text(
+              '${(_zoomLevel * 100).toInt()}%',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.zoom_in),
+            onPressed: _zoomIn,
+            tooltip: 'Zoom In',
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: templateAsync.when(
         data: (activeTemplate) => PdfPreview(
+          // Using maxPageWidth to simulate zoom since directly 'zoom' might not be available or behaves differently
+          maxPageWidth: MediaQuery.of(context).size.width * _zoomLevel * 1.5,
           build: (format) async {
             final repo = ref.read(invoiceTemplateRepositoryProvider);
-            
-            // 2. Hydrate template with business/tenant/stored-settings
             final invoiceData = await repo.getHydratedInvoiceData(tenantId, null);
 
-            // 3. Inject transaction-specific data
-            invoiceData.clientName = customer?.name ?? 'Walk-in Customer';
-            invoiceData.clientAddress = customer?.address ?? '';
-            invoiceData.showClientContact = customer != null;
+            invoiceData.clientName = widget.customer?.name ?? 'Walk-in Customer';
+            invoiceData.clientAddress = widget.customer?.address ?? '';
+            invoiceData.showClientContact = widget.customer != null;
             
-            // Use existing invoice date and metadata
-            // invoiceData.notes can be set if needed
-            
-            // 4. Map DB items to the editor's item model
-            invoiceData.items = items.map((res) {
+            invoiceData.items = widget.items.map((res) {
               final itemRow = res.readTable(ServiceLocator.instance.database.invoiceItems);
               final productRow = res.readTable(ServiceLocator.instance.database.products);
               
               return editor_models.InvoiceItem(
                 id: itemRow.id.toString(),
                 desc: productRow.name,
-                details: '', // Or product description if exists
+                details: '', 
                 qty: itemRow.quantity.toDouble(),
                 rate: itemRow.unitPrice,
               );
             }).toList();
 
-            // 5. Generate PDF using the new engine
             final doc = activeTemplate.buildPdf(invoiceData);
             return doc.save();
           },

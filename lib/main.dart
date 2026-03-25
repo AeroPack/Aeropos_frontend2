@@ -75,7 +75,7 @@ class EzoPosApp extends ConsumerWidget {
 
       // ── Theme ───────────────────────────────────────────────────────────────
       theme: ThemeData(
-        fontFamily: 'AppFont',
+        fontFamily: 'Inter',
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),

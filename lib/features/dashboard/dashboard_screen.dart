@@ -5,6 +5,7 @@ import '../sales/state/sales_state.dart';
 import '../../core/models/sale_stats.dart';
 import '../../core/di/service_locator.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -36,7 +37,7 @@ class DashboardScreen extends ConsumerWidget {
                     SizedBox(height: isMobile ? 24 : 40),
                     _buildChartsRow(context, isMobile, isTablet, stats),
                     SizedBox(height: isMobile ? 24 : 40),
-                    _buildTransactionsTable(isMobile, recentSalesAsync),
+                    _buildTransactionsTable(context, isMobile, recentSalesAsync),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -266,8 +267,8 @@ class DashboardScreen extends ConsumerWidget {
           iconColor: const Color(0xFF994100),
           title: 'Gross Sales',
           value: 'Rs ${stats.grossSales.toStringAsFixed(0)}',
-          trend: '12%',
-          trendUp: true,
+          trend: '${stats.grossSalesTrend.toStringAsFixed(1)}%',
+          trendUp: stats.grossSalesTrend >= 0,
           isMobile: isMobile,
         ),
         _KPIStatCard(
@@ -275,8 +276,8 @@ class DashboardScreen extends ConsumerWidget {
           iconColor: const Color(0xFF994100),
           title: 'Net Sales',
           value: 'Rs ${stats.netSales.toStringAsFixed(0)}',
-          trend: '8.4%',
-          trendUp: true,
+          trend: '${stats.netSalesTrend.toStringAsFixed(1)}%',
+          trendUp: stats.netSalesTrend >= 0,
           isMobile: isMobile,
         ),
         _KPIStatCard(
@@ -284,8 +285,8 @@ class DashboardScreen extends ConsumerWidget {
           iconColor: const Color(0xFF994100),
           title: 'Avg Order',
           value: 'Rs ${stats.avgOrder.toStringAsFixed(0)}',
-          trend: '2.1%',
-          trendUp: false,
+          trend: '${stats.avgOrderTrend.abs().toStringAsFixed(1)}%',
+          trendUp: stats.avgOrderTrend >= 0,
           isMobile: isMobile,
         ),
         _KPIStatCard(
@@ -293,8 +294,8 @@ class DashboardScreen extends ConsumerWidget {
           iconColor: const Color(0xFF994100),
           title: 'Total Orders',
           value: stats.totalOrders.toString(),
-          trend: '15.7%',
-          trendUp: true,
+          trend: '${stats.totalOrdersTrend.toStringAsFixed(1)}%',
+          trendUp: stats.totalOrdersTrend >= 0,
           isMobile: isMobile,
         ),
       ],
@@ -305,7 +306,7 @@ class DashboardScreen extends ConsumerWidget {
     if (isMobile) {
       return Column(
         children: [
-          _buildRevenueChart(isMobile),
+          _buildRevenueChart(isMobile, stats),
           const SizedBox(height: 16),
           _buildPaymentMethods(isMobile, stats),
         ],
@@ -315,14 +316,14 @@ class DashboardScreen extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(flex: isTablet ? 1 : 2, child: _buildRevenueChart(isMobile)),
+        Expanded(flex: isTablet ? 1 : 2, child: _buildRevenueChart(isMobile, stats)),
         SizedBox(width: isTablet ? 16 : 24),
         Expanded(flex: 1, child: _buildPaymentMethods(isMobile, stats)),
       ],
     );
   }
 
-  Widget _buildRevenueChart(bool isMobile) {
+  Widget _buildRevenueChart(bool isMobile, SaleStats stats) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double availableWidth = constraints.maxWidth;
@@ -330,6 +331,8 @@ class DashboardScreen extends ConsumerWidget {
         // Chart height scales proportionally with the container width
         final double chartHeight =
             (availableWidth * 0.38).clamp(120.0, 220.0);
+
+        final double maxVal = stats.revenueTrend.fold(0.0, (m, p) => p.amount > m ? p.amount : m);
 
         return Container(
           padding: EdgeInsets.all(innerPadding),
@@ -345,7 +348,7 @@ class DashboardScreen extends ConsumerWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      'Revenue Trend',
+                      'Revenue Trend (Last 7 Days)',
                       style: TextStyle(
                         fontSize: isMobile ? 18 : 20,
                         fontWeight: FontWeight.w700,
@@ -353,39 +356,24 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  if (!isMobile)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildLegendItem('Online', const Color(0xFFff7a23)),
-                        const SizedBox(width: 16),
-                        _buildLegendItem('In-Store', const Color(0xFF863800)),
-                      ],
-                    ),
                 ],
               ),
-              if (isMobile) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _buildLegendItem('Online', const Color(0xFFff7a23)),
-                    const SizedBox(width: 16),
-                    _buildLegendItem('In-Store', const Color(0xFF863800)),
-                  ],
-                ),
-              ],
+              const SizedBox(height: 4),
+              const Text(
+                'Daily gross revenue performance',
+                style: TextStyle(fontSize: 12, color: Color(0xFF595c5d)),
+              ),
               SizedBox(height: isMobile ? 20 : 28),
               SizedBox(
                 height: chartHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _buildBar('MON', 0.6, chartHeight, isMobile),
-                    _buildBar('TUE', 0.9, chartHeight, isMobile),
-                    _buildBar('WED', 0.7, chartHeight, isMobile),
-                    _buildBar('THU', 0.95, chartHeight, isMobile),
-                    _buildBar('FRI', 1.0, chartHeight, isMobile),
-                  ],
+                  children: stats.revenueTrend.isEmpty 
+                    ? [const Center(child: Text('No data'))]
+                    : stats.revenueTrend.map((p) {
+                        final factor = maxVal > 0 ? p.amount / maxVal : 0.0;
+                        return _buildBar(p.label, factor, chartHeight, isMobile);
+                      }).toList(),
                 ),
               ),
             ],
@@ -395,27 +383,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF595c5d),
-          ),
-        ),
-      ],
-    );
-  }
+
 
   Widget _buildBar(
     String label,
@@ -600,6 +568,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildTransactionsTable(
+    BuildContext context,
     bool isMobile,
     AsyncValue<List<TypedResult>> salesAsync,
   ) {
@@ -623,23 +592,30 @@ class DashboardScreen extends ConsumerWidget {
                     color: const Color(0xFF2c2f30),
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'View All',
-                      style: TextStyle(
-                        fontSize: isMobile ? 13 : 14,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF994100),
-                      ),
+                InkWell(
+                  onTap: () => context.go('/sales-history'),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View All',
+                          style: TextStyle(
+                            fontSize: isMobile ? 13 : 14,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF994100),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: isMobile ? 16 : 18,
+                          color: const Color(0xFF994100),
+                        ),
+                      ],
                     ),
-                    Icon(
-                      Icons.chevron_right,
-                      size: isMobile ? 16 : 18,
-                      color: const Color(0xFF994100),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -650,7 +626,7 @@ class DashboardScreen extends ConsumerWidget {
               headingRowColor: WidgetStateProperty.all(
                 const Color(0xFFeff1f2).withValues(alpha: 0.5),
               ),
-              columnSpacing: isMobile ? 24 : 48,
+              columnSpacing: isMobile ? 24 : 80,
               dataRowMinHeight: isMobile ? 48 : 56,
               dataRowMaxHeight: isMobile ? 52 : 60,
               columns: const [

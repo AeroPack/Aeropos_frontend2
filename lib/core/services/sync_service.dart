@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/app_database.dart';
 // import '../models/enums/sync_status.dart';
 import '../repositories/product_repository.dart';
@@ -112,6 +113,12 @@ class SyncService {
 
   Future<void> sync() async {
     if (_isSyncing) return;
+
+    // Skip sync if no auth token exists (user not logged in)
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'auth_token');
+    if (token == null || token.isEmpty) return;
+
     _isSyncing = true;
 
     try {

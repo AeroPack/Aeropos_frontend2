@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +11,7 @@ import 'template_engine/template_registry.dart';
 import 'template_repository.dart';
 import 'package:ezo/core/providers/tenant_provider.dart';
 import 'package:ezo/core/di/service_locator.dart';
+import 'package:http/http.dart' as http;
 
 class Debouncer {
   final int milliseconds;
@@ -118,7 +118,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   late String fontFamily;
   late List<InvoiceItem> items;
   late String notes;
-  String? logoPath;
+  String? logoPath; // This will store the server URL
   Uint8List? logoBytes;
   late int thermalWidth;
   late bool showTaxBreakdown;
@@ -127,7 +127,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   late bool showClientContact;
   late bool showNotes;
 
-  // Controllers
   final TextEditingController _businessNameController = TextEditingController();
   final TextEditingController _businessEmailController =
       TextEditingController();
@@ -153,7 +152,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   String deviceView = 'desktop';
   late InvoiceTemplate activeTemplate;
 
-  // Font configuration - using local fonts
   final List<Map<String, String>> fonts = const [
     {'name': 'Inter', 'family': 'Inter', 'displayName': 'Inter'},
     {'name': 'Roboto', 'family': 'Roboto', 'displayName': 'Roboto'},
@@ -183,16 +181,46 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     _loadInitialData();
   }
 
+  Future<void> _loadLogoFromUrl(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            logoBytes = response.bodyBytes;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load logo from URL: $e');
+    }
+  }
+
   Future<void> _loadInitialData() async {
     final tenantId = ref.read(tenantIdProvider);
     final repo = ref.read(invoiceTemplateRepositoryProvider);
 
     Map<String, dynamic>? profile;
+    String? cachedLogoUrl;
+
     try {
       final profileRepo = ServiceLocator.instance.profileRepository;
+      final storage = ServiceLocator.instance.secureStorage;
+
       profile = await profileRepo.getProfile();
+
+      // Read cached logo URL from secure storage
+      cachedLogoUrl = await storage.read(key: 'cached_logo_url');
+
+      // If we have a cached URL but no logoBytes, fetch them
+      if (cachedLogoUrl != null &&
+          cachedLogoUrl.isNotEmpty &&
+          logoBytes == null) {
+        _loadLogoFromUrl(cachedLogoUrl);
+      }
     } catch (e) {
       profile = null;
+      debugPrint('Error loading profile: $e');
     }
 
     try {
@@ -233,11 +261,41 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           items = data.items;
           notes = data.notes;
           isThermal = data.isThermal;
-          logoPath =
-              data.logoPath ??
-              (profile?['logoUrl'] ??
-                  profile?['imageUrl'] ??
-                  profile?['profileImage']);
+
+          // Load logo in priority order:
+          // 1. Saved logoPath from template data (server URL from database)
+          // 2. Cached logo URL from secure storage
+          // 3. Profile logo URL
+          if (data.logoPath != null && data.logoPath!.isNotEmpty) {
+            logoPath = data.logoPath;
+            if (logoPath!.startsWith('http') && logoBytes == null) {
+              _loadLogoFromUrl(logoPath!);
+            }
+          } else if (cachedLogoUrl != null && cachedLogoUrl.isNotEmpty) {
+            logoPath = cachedLogoUrl;
+            if (logoBytes == null) {
+              _loadLogoFromUrl(cachedLogoUrl);
+            }
+          } else if (profile?['logoUrl'] != null &&
+              profile!['logoUrl'].toString().isNotEmpty) {
+            logoPath = profile!['logoUrl'];
+            if (logoBytes == null) {
+              _loadLogoFromUrl(logoPath!);
+            }
+          } else if (profile?['imageUrl'] != null &&
+              profile!['imageUrl'].toString().isNotEmpty) {
+            logoPath = profile!['imageUrl'];
+            if (logoBytes == null) {
+              _loadLogoFromUrl(logoPath!);
+            }
+          } else if (profile?['profileImage'] != null &&
+              profile!['profileImage'].toString().isNotEmpty) {
+            logoPath = profile!['profileImage'];
+            if (logoBytes == null) {
+              _loadLogoFromUrl(logoPath!);
+            }
+          }
+
           thermalWidth = data.thermalWidth;
           showTaxBreakdown = data.showTaxBreakdown;
           showLogo = data.showLogo;
@@ -364,21 +422,49 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
     if (image != null) {
       final bytes = await image.readAsBytes();
-      setState(() {
-        logoPath = image.path;
-        logoBytes = bytes;
-      });
+
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Uploading logo...')));
+      }
 
       try {
         final profileRepo = ServiceLocator.instance.profileRepository;
-        await profileRepo.updateProfile({}, imageFile: File(image.path));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Logo uploaded successfully!')),
-          );
+        final storage = ServiceLocator.instance.secureStorage;
+
+        // Upload the logo using bytes (required for web — File(image.path) fails on web)
+        await profileRepo.updateProfile(
+          {},
+          imageBytes: bytes,
+          uploadType: 'logo',
+        );
+
+        // After successful upload, read the cached URL from secure storage
+        final uploadedUrl = await storage.read(key: 'cached_logo_url');
+
+        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+          setState(() {
+            logoPath = uploadedUrl; // Store server URL
+            logoBytes = bytes; // Store bytes for immediate display
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Logo uploaded successfully!')),
+            );
+          }
+        } else {
+          throw Exception('No URL found in cache after upload');
         }
       } catch (e) {
-        debugPrint('Failed to upload logo to profile: $e');
+        debugPrint('Failed to upload logo: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to upload logo: $e')));
+        }
       }
     }
   }
@@ -389,14 +475,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     try {
       final repo = ref.read(invoiceTemplateRepositoryProvider);
       final tenantId = ref.read(tenantIdProvider);
+      final storage = ServiceLocator.instance.secureStorage;
 
+      // Ensure we have the latest logo URL from cache
+      final cachedLogoUrl = await storage.read(key: 'cached_logo_url');
+      final finalLogoPath = logoPath ?? cachedLogoUrl;
+
+      // Save the server URL to database, not the local file path
       await repo.saveTemplateSelection(
         tenantId: tenantId,
         templateId: activeTemplate.id,
         accentColorHex:
             '#${themeColor.toARGB32().toRadixString(16).padLeft(8, '0')}',
         fontFamily: fontFamily,
-        logoPath: logoPath,
+        logoPath: finalLogoPath, // This is the server URL
         thermalWidth: thermalWidth,
         showTaxBreakdown: showTaxBreakdown,
         showLogo: showLogo,
@@ -477,8 +569,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             .toList(),
         notes: notes,
         isThermal: isThermal,
-        logoPath: logoPath,
-        logoBytes: logoBytes,
+        logoPath: logoPath, // Server URL
+        logoBytes: logoBytes, // Cached bytes for PDF generation
         thermalWidth: thermalWidth,
         showTaxBreakdown: showTaxBreakdown,
         showLogo: showLogo,
@@ -498,7 +590,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
   }
 
-  // Helper method to get the actual font family name
   String _getFontFamily(String fontName) {
     final font = fonts.firstWhere(
       (f) => f['name'] == fontName,
@@ -774,18 +865,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                         border: Border.all(color: Colors.grey.shade200),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: logoPath != null
+                      child:
+                          (logoPath != null && logoPath!.isNotEmpty) ||
+                              logoBytes != null
                           ? Stack(
                               children: [
                                 Center(
                                   child: logoBytes != null
                                       ? Image.memory(logoBytes!, height: 60)
-                                      : (kIsWeb && logoPath != null
+                                      : (logoPath != null &&
+                                                logoPath!.startsWith('http')
                                             ? Image.network(
                                                 logoPath!,
                                                 height: 60,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) {
+                                                      return const Icon(
+                                                        Icons.broken_image,
+                                                        size: 40,
+                                                      );
+                                                    },
                                               )
-                                            : const SizedBox()),
+                                            : const Icon(
+                                                Icons.image,
+                                                size: 40,
+                                              )),
                                 ),
                                 Positioned(
                                   right: 0,

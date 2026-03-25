@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 
-class InvoicePreviewScreen extends StatelessWidget {
+class InvoicePreviewScreen extends StatefulWidget {
   final Future<Uint8List> Function(PdfPageFormat) onLayout;
   final String invoiceNumber;
   final VoidCallback onPrintComplete;
@@ -14,6 +14,25 @@ class InvoicePreviewScreen extends StatelessWidget {
     required this.invoiceNumber,
     required this.onPrintComplete,
   });
+
+  @override
+  State<InvoicePreviewScreen> createState() => _InvoicePreviewScreenState();
+}
+
+class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
+  double _zoomFactor = 0.5; // Start zoomed out
+
+  void _zoomIn() {
+    setState(() {
+      _zoomFactor = (_zoomFactor + 0.1).clamp(0.2, 2.0);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _zoomFactor = (_zoomFactor - 0.1).clamp(0.2, 2.0);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,8 +51,27 @@ class InvoicePreviewScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  "Invoice",
+                  "Invoice Preview",
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.zoom_out, size: 20),
+                      onPressed: _zoomOut,
+                      tooltip: 'Zoom Out',
+                    ),
+                    Text(
+                      '${(_zoomFactor * 100).toInt()}%',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.zoom_in, size: 20),
+                      onPressed: _zoomIn,
+                      tooltip: 'Zoom In',
+                    ),
+                  ],
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -48,13 +86,15 @@ class InvoicePreviewScreen extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: PdfPreview(
-                  build: onLayout,
-                  allowPrinting: false, // We'll use our own button
+                  key: ValueKey('preview_$_zoomFactor'),
+                  build: widget.onLayout,
+                  allowPrinting: false, 
                   allowSharing: false,
                   canChangePageFormat: false,
-                  useActions: false, // Hide top action bar
+                  useActions: false, 
                   initialPageFormat: PdfPageFormat.a4,
-                  onPrinted: (context) => onPrintComplete(),
+                  maxPageWidth: 1000 * _zoomFactor,
+                  onPrinted: (context) => widget.onPrintComplete(),
                 ),
               ),
             ),
@@ -75,8 +115,8 @@ class InvoicePreviewScreen extends StatelessWidget {
                       side: BorderSide(color: Colors.grey.shade300),
                     ),
                     onPressed: () async {
-                      final pdf = await onLayout(PdfPageFormat.a4);
-                      await Printing.sharePdf(bytes: pdf, filename: 'Invoice_$invoiceNumber.pdf');
+                      final pdf = await widget.onLayout(PdfPageFormat.a4);
+                      await Printing.sharePdf(bytes: pdf, filename: 'Invoice_${widget.invoiceNumber}.pdf');
                     },
                     icon: const Icon(Icons.download, size: 20),
                     label: const Text("Download PDF", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -94,12 +134,12 @@ class InvoicePreviewScreen extends StatelessWidget {
                       elevation: 0,
                     ),
                     onPressed: () async {
-                      final pdf = await onLayout(PdfPageFormat.a4);
+                      final pdf = await widget.onLayout(PdfPageFormat.a4);
                       await Printing.layoutPdf(
-                        name: 'Invoice_$invoiceNumber',
+                        name: 'Invoice_${widget.invoiceNumber}',
                         onLayout: (PdfPageFormat format) async => pdf,
                       );
-                      onPrintComplete();
+                      widget.onPrintComplete();
                     },
                     icon: const Icon(Icons.print, size: 20),
                     label: const Text("Print Invoice", style: TextStyle(fontWeight: FontWeight.bold)),

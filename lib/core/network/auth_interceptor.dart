@@ -12,7 +12,7 @@ class AuthInterceptor extends Interceptor {
     RequestInterceptorHandler handler,
   ) async {
     final token = await _storage.read(key: 'auth_token');
-
+    
     if (token != null) {
       options.headers['x-auth-token'] = token;
     }
@@ -21,10 +21,10 @@ class AuthInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401) {
-      // TODO: Handle token expiration / logout logic here
-      // For now we just pass the error through
+      // Clear token on 401 Unauthorized
+      await _storage.delete(key: 'auth_token');
     }
     super.onError(err, handler);
   }

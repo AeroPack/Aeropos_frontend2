@@ -116,62 +116,145 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                 const SizedBox(width: 16),
               ],
               Expanded(
-                child: Container(
-                  height: 40,
-                  constraints: BoxConstraints(
-                    maxWidth: isLargeDesktop
-                        ? 400
-                        : (isMediumDesktop ? 300 : 250),
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: TextField(
-                    onChanged: onSearch,
-                    decoration: InputDecoration(
-                      hintText: "Search",
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: Colors.grey.shade400,
-                        size: 20,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 0,
-                        horizontal: 10,
-                      ),
-                      suffixIcon: isTablet
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                                horizontal: 8,
-                              ),
-                              child: Container(
-                                width: 40,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  "⌘ K",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black54,
+                child: RawAutocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return const Iterable<String>.empty();
+                    }
+                    return _featurePages.keys.where((String option) {
+                      return option.toLowerCase().contains(
+                            textEditingValue.text.toLowerCase(),
+                          );
+                    });
+                  },
+                  onSelected: (String selection) {
+                    final route = _featurePages[selection];
+                    if (route != null) {
+                      context.go(route);
+                    }
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 8,
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 350,
+                          constraints: const BoxConstraints(maxHeight: 400),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final option = options.elementAt(index);
+                              final icon = _getPageIcon(option);
+                              return ListTile(
+                                leading: Icon(icon, size: 20, color: Colors.blue),
+                                title: Text(
+                                  option,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
+                                trailing: const Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                onTap: () => onSelected(option),
+                                hoverColor: Colors.blue.withValues(alpha: 0.05),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                    // Update search query state if internal controller changes
+                    textController.addListener(() {
+                      if (onSearch != null) {
+                        onSearch!(textController.text);
+                      }
+                    });
+
+                    // Sync with external searchQuery if provided
+                    if (searchQuery != null && textController.text != searchQuery) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        textController.text = searchQuery!;
+                      });
+                    }
+
+                    return Container(
+                      height: 40,
+                      constraints: BoxConstraints(
+                        maxWidth: isLargeDesktop
+                            ? 400
+                            : (isMediumDesktop ? 300 : 250),
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: TextField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        onSubmitted: (value) => onFieldSubmitted(),
+                        decoration: InputDecoration(
+                          hintText: "Search featured pages or search in context...",
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: Colors.grey.shade400,
+                            size: 20,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0,
+                            horizontal: 10,
+                          ),
+                          suffixIcon: isTablet
+                              ? Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                    horizontal: 8,
+                                  ),
+                                  child: Container(
+                                    width: 40,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      "⌘ K",
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -279,7 +362,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                       context.push('/company-profile');
                       break;
                     case 'manage_companies':
-                      context.push('/my-companies');
+                      context.push('/profile/companies');
                       break;
                     case 'settings':
                       context.push('/settings');
@@ -354,6 +437,61 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
           ],
     );
   }
+
+  IconData _getPageIcon(String option) {
+    switch (option) {
+      case 'Dashboard':
+        return Icons.dashboard_outlined;
+      case 'Products / Inventory':
+        return Icons.inventory_2_outlined;
+      case 'Category List':
+        return Icons.category_outlined;
+      case 'Unit List':
+        return Icons.straighten_outlined;
+      case 'Brand List':
+        return Icons.branding_watermark_outlined;
+      case 'Customers':
+        return Icons.people_outline;
+      case 'Suppliers':
+        return Icons.local_shipping_outlined;
+      case 'Sales History':
+        return Icons.history_outlined;
+      case 'New Invoice':
+        return Icons.add_shopping_cart_outlined;
+      case 'Point of Sale (POS)':
+        return Icons.point_of_sale_outlined;
+      case 'User Profile':
+        return Icons.person_outline;
+      case 'Company Profile':
+        return Icons.business_outlined;
+      case 'Employee List':
+        return Icons.badge_outlined;
+      case 'Role Settings':
+        return Icons.admin_panel_settings_outlined;
+      case 'Invoice Templates':
+        return Icons.description_outlined;
+      default:
+        return Icons.pageview_outlined;
+    }
+  }
+
+  static const Map<String, String> _featurePages = {
+    'Dashboard': '/dashboard',
+    'Products / Inventory': '/inventory',
+    'Category List': '/category-list',
+    'Unit List': '/unit-list',
+    'Brand List': '/brand-list',
+    'Customers': '/customers',
+    'Suppliers': '/suppliers',
+    'Sales History': '/sales-history',
+    'New Invoice': '/new-invoice',
+    'Point of Sale (POS)': '/pos',
+    'User Profile': '/profile',
+    'Company Profile': '/company-profile',
+    'Employee List': '/employees',
+    'Role Settings': '/settings/roles',
+    'Invoice Templates': '/invoice-templates',
+  };
 
   void _toggleFullscreen(BuildContext context) {
     final isFullscreen =

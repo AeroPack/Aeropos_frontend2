@@ -65,10 +65,7 @@ flutter:
   generate: true
   uses-material-design: true
 
-  # Assets section
-  assets:
-    - assets/fonts/
-
+ 
   # Fonts section - ALL fonts defined here
   fonts:
     # Inter font

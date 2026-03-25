@@ -99,7 +99,7 @@ class AuthController extends StateNotifier<AuthState> {
         state = AuthState.unauthenticated();
       }
     } catch (e) {
-      state = AuthState.unauthenticated(e.toString());
+      state = AuthState.unauthenticated(_extractErrorMessage(e, "Check authentication failed"));
     }
   }
 
@@ -361,8 +361,18 @@ class AuthController extends StateNotifier<AuthState> {
   String _extractErrorMessage(dynamic e, String fallback) {
     if (e is DioException) {
       if (e.response?.data is Map && e.response!.data['error'] != null) {
-        return e.response!.data['error'];
+        return e.response!.data['error'].toString();
       }
+
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 401) {
+        return "Session expired. Please log in again.";
+      } else if (statusCode == 403) {
+        return "You do not have permission to perform this action.";
+      } else if (statusCode == 500) {
+        return "Internal server error. Please try again later.";
+      }
+
       return e.message ?? fallback;
     }
     return "$fallback: ${e.toString()}";
