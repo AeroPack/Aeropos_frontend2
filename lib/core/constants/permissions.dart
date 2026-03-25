@@ -9,6 +9,8 @@ class AppPermissions {
   static const String viewReports = 'view_reports';
   static const String manageSettings = 'manage_settings';
   static const String manageProfile = 'manage_profile';
+  static const String manageInvoiceTemplates = 'manage_invoice_templates';
+  static const String changePosLayout = 'change_pos_layout';
 
   static Map<String, String> labels = {
     viewDashboard: "View Dashboard",
@@ -21,5 +23,7 @@ class AppPermissions {
     viewReports: "View Reports",
     manageSettings: "Manage Settings",
     manageProfile: "Manage Company Profile",
+    manageInvoiceTemplates: "Manage Invoice Templates",
+    changePosLayout: "Change POS Screen Layout",
   };
 }

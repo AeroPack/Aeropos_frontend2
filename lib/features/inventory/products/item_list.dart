@@ -9,6 +9,7 @@ import 'package:ezo/core/widgets/delete_confirmation_dialog.dart';
 import 'package:ezo/core/widgets/generic_data_table.dart';
 import '../../../../core/widgets/role_guard.dart';
 import '../../../../core/models/user.dart'; // Added
+import '../../../../core/widgets/table_export_actions.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -104,22 +105,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 ),
               ],
               actions: [
-                _headerIconButton(
-                  Icons.picture_as_pdf,
-                  Colors.red.shade50,
-                  Colors.red,
-                ),
-                const SizedBox(width: 8),
-                _headerIconButton(
-                  Icons.table_view,
-                  Colors.green.shade50,
-                  Colors.green,
-                ),
-                const SizedBox(width: 8),
-                _headerIconButton(
-                  Icons.print,
-                  Colors.grey.shade100,
-                  Colors.grey.shade700,
+                Builder(
+                  builder: (context) {
+                    final exportHeaders = ['S.No', 'Product Name', 'SKU', 'Category', 'Brand', 'Price'];
+                    final exportRows = results.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final item = entry.value;
+                      final product = item.readTable(viewModel.database.products);
+                      final category = item.readTableOrNull(viewModel.database.categories);
+                      final brand = item.readTableOrNull(viewModel.database.brands);
+                      return [
+                        '${idx + 1}',
+                        product.name,
+                        product.sku ?? '-',
+                        category?.name ?? '-',
+                        brand?.name ?? '-',
+                        '₹${product.price.toStringAsFixed(2)}',
+                      ];
+                    }).toList();
+
+                    return TableExportActions(
+                      title: 'Product List',
+                      headers: exportHeaders,
+                      dataRows: exportRows,
+                    );
+                  },
                 ),
                 const SizedBox(width: 16),
                 RoleGuard(
@@ -255,26 +265,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
       ..sort((a, b) => a.label.compareTo(b.label));
   }
 
-  Widget _headerIconButton(
-    IconData icon,
-    Color bg,
-    Color iconColor, {
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: iconColor, size: 20),
-      ),
-    );
-  }
 
   void _showDeleteConfirmation(BuildContext context, ProductEntity product) {
     DeleteConfirmationDialog.show(

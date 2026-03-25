@@ -7,6 +7,8 @@ import '../di/service_locator.dart';
 import 'sync_progress_dialog.dart';
 import 'pos_calculator.dart';
 import 'company_switcher.dart';
+import '../../features/profile/presentation/providers/profile_controller.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback? onSidebarToggle;
@@ -268,26 +270,6 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
               const SizedBox(width: 8),
             ],
             if (isMediumDesktop) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: ElevatedButton.icon(
-                  onPressed: () => context.push('/new-invoice'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_circle_outline, size: 18),
-                  label: const Text("Add New"),
-                ),
-              ),
               if (!hidePosButton)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
@@ -346,12 +328,18 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                icon: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.grey.shade300,
-                  backgroundImage: const NetworkImage(
-                    'https://i.pravatar.cc/150?img=11',
-                  ),
+                icon: Consumer(
+                  builder: (context, ref, child) {
+                    final profileState = ref.watch(profileControllerProvider);
+                    final userImage = profileState.profile?['userImage'];
+                    return CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.grey.shade300,
+                      backgroundImage: (userImage != null && userImage.toString().isNotEmpty)
+                          ? CachedNetworkImageProvider(userImage.toString())
+                          : const NetworkImage('https://i.pravatar.cc/150?img=11') as ImageProvider,
+                    );
+                  },
                 ),
                 onSelected: (value) {
                   switch (value) {
@@ -493,15 +481,14 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
     'Invoice Templates': '/invoice-templates',
   };
 
-  void _toggleFullscreen(BuildContext context) {
-    final isFullscreen =
-        MediaQuery.of(context).viewInsets.top > 0 ||
-        MediaQuery.of(context).size.width == MediaQuery.of(context).size.width;
+  static bool _isFullscreen = false;
 
-    if (isFullscreen) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    } else {
+  void _toggleFullscreen(BuildContext context) {
+    _isFullscreen = !_isFullscreen;
+    if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
   }
 

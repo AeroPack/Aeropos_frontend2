@@ -25,13 +25,6 @@ class SettingsScreen extends StatelessWidget {
         // RTL-safe padding
         padding: const EdgeInsetsDirectional.all(16),
         children: [
-          _buildSettingsItem(
-            context,
-            title: l10n.invoiceSettings,
-            subtitle: l10n.invoiceSettingsSubtitle,
-            icon: Icons.receipt_long,
-            onTap: () => context.go('/settings/invoice'),
-          ),
 
           RoleGuard(
             permission: AppPermissions.manageEmployees,
