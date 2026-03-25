@@ -147,8 +147,7 @@ class InvoiceNotifier extends StateNotifier<InvoiceState> {
       final historyNotifier = ref.read(salesHistoryProvider.notifier);
       historyNotifier.refresh();
     } catch (e) {
-      // ignore: avoid_print
-      print('Could not refresh sales history: $e');
+      // ignored
     }
 
     reset();

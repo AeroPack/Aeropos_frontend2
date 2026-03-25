@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/app_database.dart';
+import '../di/service_locator.dart';
 // import '../models/enums/sync_status.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/customer_repository.dart';
@@ -81,8 +82,12 @@ class SyncService {
   final UnitRepository unitRepo;
   final BrandRepository brandRepo;
 
+  int get _tenantId => ServiceLocator.instance.tenantService.tenantId;
+
   Timer? _syncTimer;
+  Timer? _syncDebounceTimer;
   bool _isSyncing = false;
+  bool _isPulling = false;
 
   SyncService({
     required this.db,
@@ -103,15 +108,32 @@ class SyncService {
 
   void startAutoSync({Duration interval = const Duration(minutes: 5)}) {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(interval, (_) => sync());
-    sync();
+    _syncTimer = Timer.periodic(interval, (_) {
+      sync();
+    });
+    // Delay the first sync to let AuthController finish login
+    Future.delayed(const Duration(seconds: 5), () {
+      sync();
+    });
   }
 
   void stopAutoSync() {
     _syncTimer?.cancel();
+    _syncDebounceTimer?.cancel();
   }
 
+  /// Debounced sync — coalesces rapid-fire calls into one execution
   Future<void> sync() async {
+    // Only debounce if not already syncing
+    if (_isSyncing) return;
+    
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = Timer(const Duration(seconds: 2), () {
+      _doSync();
+    });
+  }
+
+  Future<void> _doSync() async {
     if (_isSyncing) return;
 
     // Skip sync if no auth token exists (user not logged in)
@@ -273,7 +295,15 @@ class SyncService {
   }
 
   Future<void> pull() async {
+    if (_isPulling) return;
+    _isPulling = true;
+
     try {
+      // Skip pull if no auth token exists (user not logged in)
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || token.isEmpty) return;
+
       // Force full sync if database is empty
       final productCount = await (db.select(db.products)..limit(1)).get();
       if (productCount.isEmpty) {
@@ -294,7 +324,6 @@ class SyncService {
         final responseData = response.data as Map<String, dynamic>;
         final updates = responseData['updates'] as Map<String, dynamic>?;
         if (updates != null) {
-          // Log specific table counts
           updates.forEach((key, value) {
             if (value is List) {}
           });
@@ -304,6 +333,8 @@ class SyncService {
       }
     } catch (e) {
       if (e is DioException) {}
+    } finally {
+      _isPulling = false;
     }
   }
 
@@ -374,12 +405,17 @@ class SyncService {
             'subcategory': cat.subcategory,
             'description': cat.description,
             'isActive': cat.isActive,
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.categories)..where((t) => t.id.equals(cat.id)))
                 .write(CategoriesCompanion(syncStatus: Value(0)));
           },
           'Category: ${cat.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.categories)..where((t) => t.id.equals(cat.id)))
+                .write(CategoriesCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['categories'] = syncedCounts['categories']! + 1;
@@ -400,12 +436,17 @@ class SyncService {
             'name': unit.name,
             'symbol': unit.symbol,
             'isActive': unit.isActive,
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.units)..where((t) => t.id.equals(unit.id)))
                 .write(UnitsCompanion(syncStatus: Value(0)));
           },
           'Unit: ${unit.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.units)..where((t) => t.id.equals(unit.id)))
+                .write(UnitsCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['units'] = syncedCounts['units']! + 1;
@@ -426,12 +467,17 @@ class SyncService {
             'name': brand.name,
             'description': brand.description,
             'isActive': brand.isActive,
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.brands)..where((t) => t.id.equals(brand.id)))
                 .write(BrandsCompanion(syncStatus: Value(0)));
           },
           'Brand: ${brand.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.brands)..where((t) => t.id.equals(brand.id)))
+                .write(BrandsCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['brands'] = syncedCounts['brands']! + 1;
@@ -482,12 +528,17 @@ class SyncService {
             'imageUrl': prod.imageUrl,
             'isPercentDiscount': prod.isPercentDiscount,
             'isActive': prod.isActive,
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
                 .write(ProductsCompanion(syncStatus: Value(0)));
           },
           'Product: ${prod.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
+                .write(ProductsCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['products'] = syncedCounts['products']! + 1;
@@ -513,6 +564,7 @@ class SyncService {
             // 'role': 'customer', // Handled by endpoint usually or we can send it
             'creditLimit': customer.creditLimit,
             'currentBalance': customer.currentBalance,
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.customers)
@@ -520,6 +572,10 @@ class SyncService {
                 .write(CustomersCompanion(syncStatus: Value(0)));
           },
           'Customer: ${customer.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.customers)..where((t) => t.id.equals(customer.id)))
+                .write(CustomersCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['customers'] = syncedCounts['customers']! + 1;
@@ -542,6 +598,7 @@ class SyncService {
             'phone': supplier.phone,
             'email': supplier.email,
             'address': supplier.address,
+            'companyId': _tenantId,
             // 'role': 'supplier',
           },
           () async {
@@ -550,6 +607,10 @@ class SyncService {
                 .write(SuppliersCompanion(syncStatus: Value(0)));
           },
           'Supplier: ${supplier.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.suppliers)..where((t) => t.id.equals(supplier.id)))
+                .write(SuppliersCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['suppliers'] = syncedCounts['suppliers']! + 1;
@@ -576,6 +637,7 @@ class SyncService {
                 employee.role, // Sync the actual role (admin/manager/employee)
             'password': employee.password, // Send password to backend
             'authMethod': employee.googleAuth ? 'google' : 'manual',
+            'companyId': _tenantId,
           },
           () async {
             await (db.update(db.employees)
@@ -583,6 +645,10 @@ class SyncService {
                 .write(EmployeesCompanion(syncStatus: Value(0)));
           },
           'Employee: ${employee.name}',
+          onPermanentFailure: () async {
+            await (db.update(db.employees)..where((t) => t.id.equals(employee.id)))
+                .write(EmployeesCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['employees'] = syncedCounts['employees']! + 1;
@@ -596,26 +662,47 @@ class SyncService {
         db.invoices,
       )..where((t) => t.syncStatus.equals(1))).get();
       for (final inv in pendingInvoices) {
-        final items = await (db.select(
+        final itemsWithProducts = await (db.select(
           db.invoiceItems,
-        )..where((t) => t.invoiceId.equals(inv.id))).get();
+        ).join([
+          innerJoin(db.products, db.products.id.equalsExp(db.invoiceItems.productId)),
+        ])..where(db.invoiceItems.invoiceId.equals(inv.id))).get();
+
+        final customer = inv.customerId != null
+            ? await (db.select(
+                db.customers,
+              )..where((t) => t.id.equals(inv.customerId!))).getSingleOrNull()
+            : null;
+
         final success = await _pushEntity(
           'api/invoices',
           {
             'uuid': inv.uuid,
             'invoiceNumber': inv.invoiceNumber,
             'customerId': inv.customerId,
+            'customerUuid': customer?.uuid,
+            'date': inv.date.toIso8601String(),
             'subtotal': inv.subtotal,
             'tax': inv.tax,
             'discount': inv.discount,
             'total': inv.total,
-            'items': items
+            'paymentMethod': inv.paymentMethod,
+            'companyId': _tenantId,
+            'items': itemsWithProducts
                 .map(
-                  (e) => {
-                    'productId': e.productId,
-                    'quantity': e.quantity,
-                    'unitPrice': e.unitPrice,
-                    'totalPrice': e.totalPrice,
+                  (row) {
+                    final e = row.readTable(db.invoiceItems);
+                    final p = row.readTable(db.products);
+                    return {
+                      'uuid': e.uuid,
+                      'productId': p.id,
+                      'productUuid': p.uuid,
+                      'quantity': e.quantity,
+                      'unitPrice': e.unitPrice,
+                      'totalPrice': e.totalPrice,
+                      'bonus': e.bonus,
+                      'discount': e.discount,
+                    };
                   },
                 )
                 .toList(),
@@ -625,6 +712,10 @@ class SyncService {
                 .write(InvoicesCompanion(syncStatus: Value(0)));
           },
           'Invoice: ${inv.invoiceNumber}',
+          onPermanentFailure: () async {
+            await (db.update(db.invoices)..where((t) => t.id.equals(inv.id)))
+                .write(InvoicesCompanion(syncStatus: Value(2)));
+          },
         );
         if (success) {
           syncedCounts['invoices'] = syncedCounts['invoices']! + 1;
@@ -649,8 +740,9 @@ class SyncService {
     String endpoint,
     Map<String, dynamic> data,
     Future<void> Function() onSuccess,
-    String entityDescription,
-  ) async {
+    String entityDescription, {
+    Future<void> Function()? onPermanentFailure,
+  }) async {
     try {
       final response = await dio.post(endpoint, data: data);
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -661,15 +753,12 @@ class SyncService {
       }
     } catch (e) {
       if (e is DioException) {
+        // Mark as permanently failed on 400 — these will never succeed without manual intervention
         if (e.response?.statusCode == 400) {
-        } else if (e.response?.statusCode == 401) {
-        } else if (e.response?.statusCode == 500) {
-        } else if (e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.receiveTimeout) {
-        } else if (e.type == DioExceptionType.connectionError) {}
-        if (e.response?.data != null) {}
+          await onPermanentFailure?.call();
+        }
       }
-      return false; // Return false instead of rethrowing
+      return false;
     }
   }
 

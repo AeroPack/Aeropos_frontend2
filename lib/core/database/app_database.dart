@@ -58,8 +58,6 @@ class AppDatabase extends _$AppDatabase {
           try {
             await customStatement('ALTER TABLE users RENAME TO tenants');
           } catch (e) {
-            // ignore: avoid_print
-            print('Error renaming users table: $e');
             // Attempt to create tenants if rename failed (maybe users didn't exist)
             await m.createTable(tenants);
           }
@@ -106,11 +104,8 @@ class AppDatabase extends _$AppDatabase {
               await customStatement(
                 'UPDATE "$tableName" SET tenant_id = 1 WHERE tenant_id IS NULL',
               );
-              // ignore: avoid_print
-              print('Backfilled tenant_id for $tableName');
             } catch (e) {
               // ignore: avoid_print
-              print('Error backfilling tenant_id for $tableName: $e');
             }
           }
         }
@@ -280,14 +275,9 @@ class AppDatabase extends _$AppDatabase {
         }
 
         await customStatement(sql);
-        // ignore: avoid_print
-        print(
-          'Successfully added column $columnName to $tableName via raw SQL',
-        );
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('Error adding column $columnName: $e');
+      // ignored
     }
   }
 
@@ -484,8 +474,6 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<InvoiceEntity>> getAllInvoices() async {
     final result = await select(invoices).get();
-    // ignore: avoid_print
-    print('DB getAllInvoices: found ${result.length} invoices');
     return result;
   }
 
@@ -530,11 +518,6 @@ class AppDatabase extends _$AppDatabase {
     String? queryStr,
     int? tenantId,
   }) {
-    // ignore: avoid_print
-    print(
-      'DB getInvoiceItemsDetailedPaginated: tenantId=$tenantId, limit=$limit, offset=$offset',
-    );
-
     final query = select(invoiceItems).join([
       innerJoin(invoices, invoices.id.equalsExp(invoiceItems.invoiceId)),
       innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
@@ -542,8 +525,6 @@ class AppDatabase extends _$AppDatabase {
     ]);
 
     if (tenantId != null) {
-      // ignore: avoid_print
-      print('DB: Filtering by invoices.tenantId = $tenantId');
       query.where(invoices.tenantId.equals(tenantId));
     }
 
@@ -615,9 +596,6 @@ class AppDatabase extends _$AppDatabase {
 
       // Clear sync metadata to force full sync
       await delete(syncMetadata).go();
-
-      // ignore: avoid_print
-      print('All data cleared from local database');
     });
   }
 

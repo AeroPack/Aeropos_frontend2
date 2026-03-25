@@ -49,6 +49,7 @@ dependencies:
   google_fonts: ^6.1.0
   lucide_icons: ^0.257.0
   excel: ^4.0.6
+  web: ^1.0.0
 
 dev_dependencies:
   flutter_test:

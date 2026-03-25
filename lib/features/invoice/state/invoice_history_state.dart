@@ -100,11 +100,6 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
     try {
       final offset = state.page * state.limit;
 
-      // ignore: avoid_print
-      print(
-        'SalesHistoryNotifier: _tenantId=$_tenantId, page=${state.page}, limit=${state.limit}',
-      );
-
       // Fetch items
       final newItems = await _db.getInvoiceItemsDetailedPaginated(
         limit: state.limit,
@@ -112,9 +107,6 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
         queryStr: state.query.isEmpty ? null : state.query,
         tenantId: _tenantId,
       );
-
-      // ignore: avoid_print
-      print('SalesHistoryNotifier: got ${newItems.length} items');
 
       int totalItems = state.totalItems;
       if (fetchCount) {
@@ -135,8 +127,6 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
         totalItems: totalItems,
       );
     } catch (e) {
-      // ignore: avoid_print
-      print('SalesHistoryNotifier _loadData error: $e');
       state = state.copyWith(isLoading: false, hasMore: false);
     }
   }

@@ -1536,7 +1536,7 @@ class _RetailLayoutState extends BasePosLayoutState<RetailLayout> {
                         ),
                       ),
                       onSubmitted: (value) {
-                        final qty = int.tryParse(value);
+                        final qty = double.tryParse(value);
                         if (qty != null && qty > 0) {
                           widget.cartNotifier.updateQuantity(item.product, qty);
                         }
@@ -1583,7 +1583,7 @@ class _RetailLayoutState extends BasePosLayoutState<RetailLayout> {
                       flex: 2,
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          final qty = int.tryParse(controller.text);
+                          final qty = double.tryParse(controller.text);
                           if (qty != null && qty > 0) {
                             widget.cartNotifier.updateQuantity(
                               item.product,
@@ -2307,7 +2307,8 @@ class _RetailLayoutState extends BasePosLayoutState<RetailLayout> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 itemCount: _heldOrders.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final order = _heldOrders[index];
                   final items = order['items'] as List<CartItem>;

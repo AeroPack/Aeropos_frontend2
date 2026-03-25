@@ -5,7 +5,6 @@ import 'package:ezo/features/invoice/invoice_template_editor/template_repository
 import 'template_engine/invoice_template.dart';
 import 'template_engine/template_registry.dart';
 
-
 // --- Selection Screen ---
 
 class SelectionScreen extends ConsumerStatefulWidget {
@@ -36,19 +35,57 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
     'Restaurant',
   ];
 
-  final List<InvoiceTemplate> templates =
-      TemplateRegistry.availableTemplates.cast<InvoiceTemplate>();
+  final List<InvoiceTemplate> templates = TemplateRegistry.availableTemplates
+      .cast<InvoiceTemplate>();
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
-    
+
     return Scaffold(
       appBar: MasterHeader(
         showSidebarToggle: false,
         isDesktop: !isMobile,
         hidePosButton: true,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+              onPressed: () => Navigator.of(context).pop(),
+              tooltip: 'Back to Dashboard',
+            ),
+            InkWell(
+              onTap: () => Navigator.of(context).pop(),
+              child: const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.storefront, color: Color(0xFF0F172A), size: 28),
+                    SizedBox(width: 8),
+                    Text(
+                      "Aero",
+                      style: TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "POS",
+                      style: TextStyle(
+                        color: Color.fromARGB(255, 0, 191, 255),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       body: Stack(
         children: [
@@ -98,7 +135,10 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
         const SizedBox(height: 4),
         Text(
           'Choose a bill format optimized for your industry',
-          style: TextStyle(fontSize: isMobile ? 16 : 18, color: Colors.grey.shade500),
+          style: TextStyle(
+            fontSize: isMobile ? 16 : 18,
+            color: Colors.grey.shade500,
+          ),
         ),
       ],
     );
@@ -132,7 +172,9 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.grey.shade900 : Colors.grey.shade500,
+                    color: isActive
+                        ? Colors.grey.shade900
+                        : Colors.grey.shade500,
                   ),
                 ),
               ),
@@ -220,7 +262,9 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isCurrentlyActive ? Colors.blue : Colors.grey.shade200,
+                    color: isCurrentlyActive
+                        ? Colors.blue
+                        : Colors.grey.shade200,
                     width: isCurrentlyActive ? 2 : 1,
                   ),
                   boxShadow: [
@@ -235,21 +279,21 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: template.previewImagePath == 'screen.png'
                       ? Container(color: Colors.grey.shade100)
-                      : template.previewImagePath.startsWith('http') 
-                          ? Image.network(
-                              template.previewImagePath,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(color: Colors.grey.shade100);
-                              },
-                            )
-                          : Image.asset(
-                              template.previewImagePath,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(color: Colors.grey.shade100);
-                              },
-                            ),
+                      : template.previewImagePath.startsWith('http')
+                      ? Image.network(
+                          template.previewImagePath,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(color: Colors.grey.shade100);
+                          },
+                        )
+                      : Image.asset(
+                          template.previewImagePath,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(color: Colors.grey.shade100);
+                          },
+                        ),
                 ),
               ),
               // Hover overlay - simplified for Flutter web
@@ -268,7 +312,8 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                         children: [
                           GestureDetector(
                             onTap: () => setState(
-                                () => previewImage = template.previewImagePath),
+                              () => previewImage = template.previewImagePath,
+                            ),
                             child: Container(
                               width: double.infinity,
                               constraints: const BoxConstraints(maxWidth: 200),
@@ -350,8 +395,7 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color:
-                            template.badgeColor,
+                        color: template.badgeColor,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -539,7 +583,9 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                           ),
                           width: double.infinity,
                           child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
                             child: (previewImage?.startsWith('http') ?? false)
                                 ? Image.network(
                                     previewImage ?? '',
@@ -594,7 +640,9 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(16),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -625,7 +673,8 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
                                 ),
                               ),
                               ElevatedButton(
-                                onPressed: () => setState(() => previewImage = null),
+                                onPressed: () =>
+                                    setState(() => previewImage = null),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.blue,
                                   foregroundColor: Colors.white,

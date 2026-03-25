@@ -10,8 +10,8 @@ import 'package:excel/excel.dart' as xl;
 import 'package:http/http.dart' as http;
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/profile/presentation/providers/profile_controller.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TableExportActions — Reusable PDF / Excel / Print widget for any data table
@@ -113,13 +113,17 @@ class TableExportActions extends ConsumerWidget {
       final pdfBytes = await _generatePdfDocument(company);
 
       if (kIsWeb) {
-        final blob = html.Blob([pdfBytes], 'application/pdf');
-        final url = html.Url.createObjectUrlFromBlob(blob);
+        final blob = web.Blob(
+          [pdfBytes.toJS].toJS,
+          web.BlobPropertyBag(type: 'application/pdf'),
+        );
+        final url = web.URL.createObjectURL(blob);
         final fileName = '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.pdf';
-        html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        web.URL.revokeObjectURL(url);
       }
 
       if (context.mounted) {
@@ -419,16 +423,18 @@ class TableExportActions extends ConsumerWidget {
       if (bytes == null) throw Exception('Failed to generate Excel file');
 
       if (kIsWeb) {
-        final blob = html.Blob(
-          [bytes],
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        final uint8Bytes = Uint8List.fromList(bytes);
+        final blob = web.Blob(
+          [uint8Bytes.toJS].toJS,
+          web.BlobPropertyBag(type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
         );
-        final url = html.Url.createObjectUrlFromBlob(blob);
+        final url = web.URL.createObjectURL(blob);
         final fileName = '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.xlsx';
-        html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        web.URL.revokeObjectURL(url);
       }
 
       if (context.mounted) {

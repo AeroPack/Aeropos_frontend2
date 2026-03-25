@@ -164,6 +164,7 @@ class AuthController extends StateNotifier<AuthState> {
     state = AuthState.loading();
     try {
       await _authRepository.switchCompany(companyId);
+      await ServiceLocator.instance.tenantService.setTenantId(companyId);
 
       // Clear local data and re-sync for the new company
       final database = ServiceLocator.instance.database;
@@ -348,6 +349,10 @@ class AuthController extends StateNotifier<AuthState> {
         response['company'] != null ? Company.fromJson(response['company']) : null;
 
     final companies = await _authRepository.getMyCompanies();
+
+    if (company != null) {
+      await ServiceLocator.instance.tenantService.setTenantId(company.id);
+    }
 
     state = AuthState(
       status: AuthStatus.authenticated,

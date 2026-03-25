@@ -125,8 +125,8 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                     }
                     return _featurePages.keys.where((String option) {
                       return option.toLowerCase().contains(
-                            textEditingValue.text.toLowerCase(),
-                          );
+                        textEditingValue.text.toLowerCase(),
+                      );
                     });
                   },
                   onSelected: (String selection) {
@@ -159,7 +159,11 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                               final option = options.elementAt(index);
                               final icon = _getPageIcon(option);
                               return ListTile(
-                                leading: Icon(icon, size: 20, color: Colors.blue),
+                                leading: Icon(
+                                  icon,
+                                  size: 20,
+                                  color: Colors.blue,
+                                ),
                                 title: Text(
                                   option,
                                   style: const TextStyle(
@@ -182,81 +186,86 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                       ),
                     );
                   },
-                  fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                    // Update search query state if internal controller changes
-                    textController.addListener(() {
-                      if (onSearch != null) {
-                        onSearch!(textController.text);
-                      }
-                    });
+                  fieldViewBuilder:
+                      (context, textController, focusNode, onFieldSubmitted) {
+                        // Update search query state if internal controller changes
+                        textController.addListener(() {
+                          if (onSearch != null) {
+                            onSearch!(textController.text);
+                          }
+                        });
 
-                    // Sync with external searchQuery if provided
-                    if (searchQuery != null && textController.text != searchQuery) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        textController.text = searchQuery!;
-                      });
-                    }
+                        // Sync with external searchQuery if provided
+                        if (searchQuery != null &&
+                            textController.text != searchQuery) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            textController.text = searchQuery!;
+                          });
+                        }
 
-                    return Container(
-                      height: 40,
-                      constraints: BoxConstraints(
-                        maxWidth: isLargeDesktop
-                            ? 400
-                            : (isMediumDesktop ? 300 : 250),
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: TextField(
-                        controller: textController,
-                        focusNode: focusNode,
-                        onSubmitted: (value) => onFieldSubmitted(),
-                        decoration: InputDecoration(
-                          hintText: "Search featured pages or search in context...",
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 14,
+                        return Container(
+                          height: 40,
+                          constraints: BoxConstraints(
+                            maxWidth: isLargeDesktop
+                                ? 400
+                                : (isMediumDesktop ? 300 : 250),
                           ),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: Colors.grey.shade400,
-                            size: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 0,
-                            horizontal: 10,
-                          ),
-                          suffixIcon: isTablet
-                              ? Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
-                                    horizontal: 8,
-                                  ),
-                                  child: Container(
-                                    width: 40,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade200,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      "⌘ K",
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black54,
+                          child: TextField(
+                            controller: textController,
+                            focusNode: focusNode,
+                            onSubmitted: (value) => onFieldSubmitted(),
+                            decoration: InputDecoration(
+                              hintText:
+                                  "Search featured pages or search in context...",
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: Colors.grey.shade400,
+                                size: 20,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 10,
+                              ),
+                              suffixIcon: isTablet
+                                  ? Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                        horizontal: 8,
                                       ),
-                                    ),
-                                  ),
-                                )
-                              : null,
-                        ),
-                      ),
-                    );
-                  },
+                                      child: Container(
+                                        width: 40,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          "⌘ K",
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
                 ),
               ),
             ],
@@ -315,12 +324,12 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
               icon: const Icon(Icons.calculate_outlined, color: Colors.grey),
               tooltip: 'Calculator',
             ),
-            if (isTablet)
-              IconButton(
-                onPressed: () => context.push('/settings'),
-                icon: const Icon(Icons.settings_outlined, color: Colors.grey),
-                tooltip: 'Settings',
-              ),
+            IconButton(
+              onPressed: () => context.go('/settings'),
+              icon: const Icon(Icons.settings_outlined, color: Colors.grey),
+              tooltip: 'Settings',
+            ),
+
             Padding(
               padding: const EdgeInsets.only(right: 16, left: 8),
               child: PopupMenuButton<String>(
@@ -335,25 +344,29 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                     return CircleAvatar(
                       radius: 18,
                       backgroundColor: Colors.grey.shade300,
-                      backgroundImage: (userImage != null && userImage.toString().isNotEmpty)
+                      backgroundImage:
+                          (userImage != null && userImage.toString().isNotEmpty)
                           ? CachedNetworkImageProvider(userImage.toString())
-                          : const NetworkImage('https://i.pravatar.cc/150?img=11') as ImageProvider,
+                          : const NetworkImage(
+                                  'https://i.pravatar.cc/150?img=11',
+                                )
+                                as ImageProvider,
                     );
                   },
                 ),
                 onSelected: (value) {
                   switch (value) {
                     case 'profile':
-                      context.push('/profile');
+                      context.go('/profile');
                       break;
                     case 'company':
-                      context.push('/company-profile');
+                      context.go('/company-profile');
                       break;
                     case 'manage_companies':
-                      context.push('/profile/companies');
+                      context.go('/profile/companies');
                       break;
                     case 'settings':
-                      context.push('/settings');
+                      context.go('/settings');
                       break;
                     case 'logout':
                       _handleLogout(context, ref);

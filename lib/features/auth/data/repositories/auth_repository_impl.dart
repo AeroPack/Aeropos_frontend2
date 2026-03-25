@@ -69,14 +69,10 @@ class AuthRepositoryImpl implements AuthRepository {
               .get();
 
       if (hasPending.isNotEmpty) {
-        // ignore: avoid_print
-        print('⚠️ WARNING: Pending changes detected during logout!');
-        // ignore: avoid_print
-        print('   This may indicate sync failed. Data will be lost.');
+        // Warning: Data will be lost.
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('Error checking pending changes during logout: $e');
+      // ignored
     }
 
     await _database.clearAllData();
@@ -98,8 +94,6 @@ class AuthRepositoryImpl implements AuthRepository {
       }
       return User.fromJson(responseMap);
     } catch (e) {
-      // ignore: avoid_print
-      print("Error fetching user: $e");
       return null;
     }
   }

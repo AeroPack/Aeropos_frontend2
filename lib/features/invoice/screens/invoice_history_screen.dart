@@ -43,9 +43,6 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
 
     final state = ref.watch(salesHistoryProvider);
     final notifier = ref.read(salesHistoryProvider.notifier);
-    
-    // ignore: avoid_print
-    print('InvoiceHistoryScreen: building with ${state.items.length} items, isLoading=${state.isLoading}');
 
     return Container(
       color: const Color(0xFFF8F9FF),
@@ -606,11 +603,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
           ),
         ),
       );
-    } catch (e, stack) {
-      // ignore: avoid_print
-      print('InvoiceHistoryScreen _buildTableRow error: $e');
-      // ignore: avoid_print
-      print(stack);
+    } catch (e) {
       return const SizedBox.shrink();
     }
   }
@@ -950,11 +943,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
                   ],
                 ),
               );
-            } catch (e, stack) {
-              // ignore: avoid_print
-              print('InvoiceHistoryScreen mobile item error: $e');
-              // ignore: avoid_print
-              print(stack);
+            } catch (e) {
               return const SizedBox.shrink();
             }
           },

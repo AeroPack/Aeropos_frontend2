@@ -19,12 +19,65 @@ import '../../core/di/service_locator.dart';
 import '../../core/exceptions/sale_validation_exception.dart';
 import '../sales/screens/invoice_preview_screen.dart';
 import '../../core/widgets/master_header.dart';
-import 'package:ezo/features/invoice/invoice_template_editor/main.dart';
 import 'package:ezo/features/invoice/invoice_template_editor/template_repository.dart';
 import 'package:ezo/features/invoice/invoice_template_editor/models.dart'
     as editor_models;
 import 'package:ezo/core/providers/tenant_provider.dart';
 import 'package:ezo/core/theme/app_theme.dart';
+
+class HeldOrder {
+  final String id;
+  final List<CartItem> items;
+  final CustomerEntity? customer;
+  final double total;
+  final DateTime createdAt;
+
+  HeldOrder({
+    required this.id,
+    required this.items,
+    this.customer,
+    required this.total,
+    required this.createdAt,
+  });
+}
+
+class HeldOrdersNotifier extends StateNotifier<List<HeldOrder>> {
+  HeldOrdersNotifier() : super([]);
+
+  void addOrder({
+    required String id,
+    required List<CartItem> items,
+    CustomerEntity? customer,
+    required double total,
+    required DateTime createdAt,
+  }) {
+    state = [
+      ...state,
+      HeldOrder(
+        id: id,
+        items: items
+            .map((i) => CartItem(product: i.product, quantity: i.quantity))
+            .toList(),
+        customer: customer,
+        total: total,
+        createdAt: createdAt,
+      ),
+    ];
+  }
+
+  void removeOrder(String id) {
+    state = state.where((o) => o.id != id).toList();
+  }
+
+  void clear() {
+    state = [];
+  }
+}
+
+final heldOrdersProvider =
+    StateNotifierProvider<HeldOrdersNotifier, List<HeldOrder>>((ref) {
+      return HeldOrdersNotifier();
+    });
 
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
@@ -58,7 +111,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               uuid: _uuid.v4(),
               productId: cartItem.product.id,
               product: cartItem.product,
-              quantity: cartItem.quantity,
+              quantity: cartItem.quantity.toInt(),
               unitPrice: cartItem.product.price,
               discount: cartItem.manualDiscount,
               total: cartItem.total,
@@ -69,7 +122,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       subtotal: cartState.subtotal,
       tax: cartState.taxAmount,
       discount: cartState.totalDiscount,
-      paymentMethod: paymentMethod, // Add the payment method here
+      paymentMethod: paymentMethod,
       createdAt: DateTime.now(),
     );
 
@@ -162,10 +215,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   void _openInvoiceSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const InvoiceTemplateEditorApp()),
-    );
+    try {
+      context.go('/settings');
+    } catch (e) {
+      // Fallback navigation
+      Navigator.pushNamed(context, '/settings');
+    }
   }
 
   void _openSalesHistory() => context.go('/sales-history');
@@ -830,15 +885,45 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         ),
         searchQuery: searchQuery,
         onSearch: onSearch,
-        customActions: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: Colors.grey),
-          ),
-          // Layout Selector as part of the header actions
-          const PosLayoutSelector(),
-          const SizedBox(width: 8),
-        ],
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+              onPressed: onBack,
+              tooltip: 'Back to Dashboard',
+            ),
+            InkWell(
+              onTap: onBack,
+              child: const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.storefront, color: Color(0xFF0F172A), size: 28),
+                    SizedBox(width: 8),
+                    Text(
+                      "Aero",
+                      style: TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "POS",
+                      style: TextStyle(
+                        color: Color.fromARGB(255, 0, 191, 255),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        customActions: const [PosLayoutSelector(), SizedBox(width: 8)],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
@@ -879,53 +964,212 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     void onSetOverallDiscount(d, p) => cartNotifier.setOverallDiscount(d, p);
     void onReset() => cartNotifier.clearCart();
 
-    void onSplitBill() {
-      if (cartState.items.isEmpty) return;
+    Future<void> onSplitBill() async {
+      if (cartState.items.isEmpty) {
+        PosToast.showInfo(context, 'Cart is empty');
+        return;
+      }
+
+      final int? splitCount = await showDialog<int>(
+        context: context,
+        builder: (ctx) => _SplitBillDialog(total: cartState.total),
+      );
+
+      if (splitCount == null || splitCount <= 1) return;
+      if (!mounted) return;
+
+      final double splitAmount = cartState.total / splitCount;
+
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Split Bill'),
-          content: const Text(
-            'Split bill functionality will be implemented here.',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Bill split into $splitCount parts'),
+              const SizedBox(height: 8),
+              Text(
+                'Each part: ₹${splitAmount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Select payment method for each split:'),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _handleCheckout(shouldSave: true, paymentMethod: 'Split');
+                PosToast.showSuccess(
+                  context,
+                  'Bill split into $splitCount payments',
+                );
+              },
+              child: const Text('Process Split'),
             ),
           ],
         ),
       );
     }
 
-    void onPrintReceipt() {
+    Future<void> onPrintReceipt() async {
+      if (cartState.items.isEmpty) {
+        PosToast.showInfo(context, 'Cart is empty');
+        return;
+      }
+
+      final sale = Sale(
+        uuid: _uuid.v4(),
+        invoiceNumber: "INV-${DateTime.now().millisecondsSinceEpoch}",
+        customerId: cartState.selectedCustomer?.id,
+        items: cartState.items
+            .map(
+              (cartItem) => SaleItem(
+                uuid: _uuid.v4(),
+                productId: cartItem.product.id,
+                product: cartItem.product,
+                quantity: cartItem.quantity.toInt(),
+                unitPrice: cartItem.product.price,
+                discount: cartItem.manualDiscount,
+                total: cartItem.total,
+              ),
+            )
+            .toList(),
+        total: cartState.total,
+        subtotal: cartState.subtotal,
+        tax: cartState.taxAmount,
+        discount: cartState.totalDiscount,
+        paymentMethod: 'Print Only',
+        createdAt: DateTime.now(),
+      );
+
+      final repo = ref.read(invoiceTemplateRepositoryProvider);
+      final tenantId = ref.read(tenantIdProvider);
+      final invoiceData = await repo.getHydratedInvoiceData(tenantId, null);
+
+      if (cartState.selectedCustomer != null) {
+        invoiceData.clientName = cartState.selectedCustomer!.name;
+        invoiceData.clientAddress = cartState.selectedCustomer!.address ?? '';
+        invoiceData.showClientContact = true;
+      } else {
+        invoiceData.clientName = 'Walk-in Customer';
+        invoiceData.clientAddress = '';
+        invoiceData.showClientContact = false;
+      }
+
+      invoiceData.paymentMethod = 'Print Only';
+      invoiceData.items = sale.items
+          .map(
+            (item) => editor_models.InvoiceItem(
+              id: item.uuid,
+              desc: item.product.name,
+              details: '',
+              qty: item.quantity.toDouble(),
+              rate: item.unitPrice,
+            ),
+          )
+          .toList();
+
+      final activeTemplate = await repo.getSelectedTemplate(tenantId);
+
+      if (!mounted) return;
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Print Receipt'),
-          content: const Text('Print functionality will be implemented here.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
+        barrierDismissible: true,
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        builder: (context) => InvoicePreviewScreen(
+          invoiceNumber: sale.invoiceNumber,
+          onLayout: (format) async {
+            final pdf = activeTemplate.buildPdf(invoiceData);
+            return pdf.save();
+          },
+          onPrintComplete: () {
+            if (mounted) Navigator.pop(context);
+            PosToast.showSuccess(context, 'Receipt printed successfully');
+          },
         ),
       );
     }
 
     void onOrderHold() {
-      if (cartState.items.isEmpty) return;
-      PosToast.showInfo(context, 'Order placed on hold');
+      if (cartState.items.isEmpty) {
+        PosToast.showInfo(context, 'Cart is empty');
+        return;
+      }
+
+      final heldOrders = ref.read(heldOrdersProvider.notifier);
+      final orderId = 'HOLD-${DateTime.now().millisecondsSinceEpoch}';
+
+      heldOrders.addOrder(
+        id: orderId,
+        items: cartState.items,
+        customer: cartState.selectedCustomer,
+        total: cartState.total,
+        createdAt: DateTime.now(),
+      );
+
+      cartNotifier.clearCart();
+      PosToast.showSuccess(context, 'Order placed on hold ($orderId)');
     }
 
     void onRecallOrder() {
+      final heldOrders = ref.read(heldOrdersProvider);
+
+      if (heldOrders.isEmpty) {
+        PosToast.showInfo(context, 'No held orders');
+        return;
+      }
+
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Recall Order'),
-          content: const Text(
-            'Recall order functionality will be implemented here.',
+          content: SizedBox(
+            width: 400,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: heldOrders.length,
+              itemBuilder: (context, index) {
+                final order = heldOrders[index];
+                return ListTile(
+                  leading: const Icon(Icons.receipt),
+                  title: Text('Order #${order.id}'),
+                  subtitle: Text(
+                    '${order.items.length} items - ₹${order.total.toStringAsFixed(2)}',
+                  ),
+                  trailing: Text(
+                    _formatDateTime(order.createdAt),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onTap: () {
+                    for (final item in order.items) {
+                      cartNotifier.addProduct(
+                        item.product,
+                        quantity: item.quantity,
+                        modifiers: item.modifiers,
+                        course: item.course,
+                      );
+                    }
+                    Navigator.pop(ctx);
+                    PosToast.showSuccess(
+                      context,
+                      'Order #${order.id} recalled',
+                    );
+                  },
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -1052,5 +1296,83 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           onBack: onBack,
         );
     }
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+class _SplitBillDialog extends StatefulWidget {
+  final double total;
+
+  const _SplitBillDialog({required this.total});
+
+  @override
+  State<_SplitBillDialog> createState() => _SplitBillDialogState();
+}
+
+class _SplitBillDialogState extends State<_SplitBillDialog> {
+  int _splitCount = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Split Bill'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('How many ways would you like to split?'),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: _splitCount > 2
+                    ? () => setState(() => _splitCount--)
+                    : null,
+                icon: const Icon(Icons.remove_circle_outline),
+                iconSize: 32,
+              ),
+              const SizedBox(width: 16),
+              Text(
+                '$_splitCount',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 16),
+              IconButton(
+                onPressed: _splitCount < 10
+                    ? () => setState(() => _splitCount++)
+                    : null,
+                icon: const Icon(Icons.add_circle_outline),
+                iconSize: 32,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Each part: ₹${(widget.total / _splitCount).toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF4F46E5),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _splitCount),
+          child: const Text('Split'),
+        ),
+      ],
+    );
   }
 }

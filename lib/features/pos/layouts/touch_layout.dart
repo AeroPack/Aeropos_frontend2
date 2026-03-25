@@ -675,7 +675,7 @@ class _TouchLayoutState extends BasePosLayoutState<TouchLayout> {
               ),
             ),
             onPressed: () {
-              final qty = int.tryParse(controller.text) ?? 1;
+              final qty = double.tryParse(controller.text) ?? 1.0;
               widget.cartNotifier.updateQuantity(item.product, qty);
               Navigator.pop(ctx);
             },

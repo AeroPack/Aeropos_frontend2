@@ -6,7 +6,7 @@ import 'package:ezo/features/pos/state/pos_category_state.dart';
 // 1. Models
 class CartItem {
   final ProductEntity product;
-  final int quantity;
+  final double quantity;
   final double manualDiscount; // The value (either Rs or %)
   final bool isPercentDiscount;
   final List<String>? modifiers;
@@ -14,7 +14,7 @@ class CartItem {
 
   const CartItem({
     required this.product,
-    this.quantity = 1,
+    this.quantity = 1.0,
     this.manualDiscount = 0.0,
     this.isPercentDiscount = false,
     this.modifiers,
@@ -62,7 +62,7 @@ class CartItem {
 
   CartItem copyWith({
     ProductEntity? product,
-    int? quantity,
+    double? quantity,
     double? manualDiscount,
     bool? isPercentDiscount,
     List<String>? modifiers,
@@ -149,18 +149,24 @@ class CartNotifier extends StateNotifier<CartState> {
     return true;
   }
 
-  void addProduct(ProductEntity product, {List<String>? modifiers, String? course}) {
+  void addProduct(
+    ProductEntity product, {
+    double quantity = 1.0,
+    List<String>? modifiers,
+    String? course,
+  }) {
     final existingIndex = state.items.indexWhere(
-      (i) => i.product.id == product.id && 
-             _compareModifiers(i.modifiers, modifiers) &&
-             i.course == course,
+      (i) =>
+          i.product.id == product.id &&
+          _compareModifiers(i.modifiers, modifiers) &&
+          i.course == course,
     );
 
     if (existingIndex >= 0) {
       // Increment
       final newItems = List<CartItem>.from(state.items);
       final newItem = newItems[existingIndex].copyWith(
-        quantity: newItems[existingIndex].quantity + 1,
+        quantity: newItems[existingIndex].quantity + quantity,
       );
       newItems[existingIndex] = newItem;
       state = state.copyWith(items: newItems);
@@ -178,6 +184,7 @@ class CartNotifier extends StateNotifier<CartState> {
           ...state.items,
           CartItem(
             product: product,
+            quantity: quantity,
             manualDiscount: validDiscount,
             isPercentDiscount: product.isPercentDiscount,
             modifiers: modifiers,
@@ -188,26 +195,39 @@ class CartNotifier extends StateNotifier<CartState> {
     }
   }
 
-  void removeProduct(ProductEntity product, {List<String>? modifiers, String? course}) {
+  void removeProduct(
+    ProductEntity product, {
+    List<String>? modifiers,
+    String? course,
+  }) {
     state = state.copyWith(
-      items: state.items.where((i) => 
-        i.product.id != product.id || 
-        !_compareModifiers(i.modifiers, modifiers) ||
-        i.course != course
-      ).toList(),
+      items: state.items
+          .where(
+            (i) =>
+                i.product.id != product.id ||
+                !_compareModifiers(i.modifiers, modifiers) ||
+                i.course != course,
+          )
+          .toList(),
     );
   }
 
-  void updateQuantity(ProductEntity product, int quantity, {List<String>? modifiers, String? course}) {
+  void updateQuantity(
+    ProductEntity product,
+    double quantity, {
+    List<String>? modifiers,
+    String? course,
+  }) {
     if (quantity <= 0) {
       removeProduct(product, modifiers: modifiers, course: course);
       return;
     }
 
-    final index = state.items.indexWhere((i) => 
-      i.product.id == product.id && 
-      _compareModifiers(i.modifiers, modifiers) &&
-      i.course == course
+    final index = state.items.indexWhere(
+      (i) =>
+          i.product.id == product.id &&
+          _compareModifiers(i.modifiers, modifiers) &&
+          i.course == course,
     );
     if (index >= 0) {
       final newItems = List<CartItem>.from(state.items);

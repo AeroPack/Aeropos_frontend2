@@ -192,7 +192,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Failed to load logo from URL: $e');
+      // Failed to load logo
     }
   }
 
@@ -220,7 +220,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
     } catch (e) {
       profile = null;
-      debugPrint('Error loading profile: $e');
     }
 
     try {
@@ -278,19 +277,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             }
           } else if (profile?['logoUrl'] != null &&
               profile!['logoUrl'].toString().isNotEmpty) {
-            logoPath = profile!['logoUrl'];
+            logoPath = profile['logoUrl'] as String?;
             if (logoBytes == null) {
               _loadLogoFromUrl(logoPath!);
             }
           } else if (profile?['imageUrl'] != null &&
               profile!['imageUrl'].toString().isNotEmpty) {
-            logoPath = profile!['imageUrl'];
+            logoPath = profile['imageUrl'] as String?;
             if (logoBytes == null) {
               _loadLogoFromUrl(logoPath!);
             }
           } else if (profile?['profileImage'] != null &&
-              profile!['profileImage'].toString().isNotEmpty) {
-            logoPath = profile!['profileImage'];
+              profile?['profileImage'].toString().isNotEmpty == true) {
+            logoPath = profile?['profileImage'];
             if (logoBytes == null) {
               _loadLogoFromUrl(logoPath!);
             }
@@ -459,7 +458,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           throw Exception('No URL found in cache after upload');
         }
       } catch (e) {
-        debugPrint('Failed to upload logo: $e');
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -521,7 +519,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           await profileRepo.updateProfile(profileData);
         }
       } catch (e) {
-        debugPrint('Failed to sync business details to profile: $e');
+        // Failed to sync business details
       }
 
       if (mounted) {

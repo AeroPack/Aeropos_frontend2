@@ -75,15 +75,8 @@ class SaleRepository {
   }
 
   Future<int> createSale(Sale sale) async {
-    // ignore: avoid_print
-    print(
-      'SaleRepository.createSale: starting for invoice ${sale.invoiceNumber}',
-    );
-
     // Validate products before creating sale
     final validationErrors = await validateSaleProducts(sale);
-    // ignore: avoid_print
-    print('SaleRepository.createSale: validation errors = $validationErrors');
     if (validationErrors.isNotEmpty) {
       throw SaleValidationException(
         'Cannot create sale with invalid products',
@@ -129,8 +122,6 @@ class SaleRepository {
           .toList();
 
       await _db.insertInvoiceItems(itemCompanions);
-      // ignore: avoid_print
-      print('SaleRepository.createSale: invoice created with id=$invoiceId');
       return invoiceId;
     });
 
@@ -138,8 +129,6 @@ class SaleRepository {
     try {
       ServiceLocator.instance.syncService.sync();
     } catch (e) {
-      // ignore: avoid_print
-      print('Sync error after creating sale: $e');
       if (e is DioException && e.response?.statusCode == 400) {
         final errorData = e.response?.data;
         if (errorData is Map && errorData.containsKey('invalidProducts')) {

@@ -13,8 +13,6 @@ final companiesProvider = FutureProvider<List<Company>>((ref) async {
     final authRepo = ServiceLocator.instance.authRepository;
     return await authRepo.getMyCompanies();
   } catch (e) {
-    // ignore: avoid_print
-    print('Error fetching companies: $e');
     return [];
   }
 });

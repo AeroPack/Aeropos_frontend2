@@ -96,7 +96,9 @@ class ServiceLocator {
     );
 
     // Initialize services
-    tenantService = TenantService();
+    tenantService = TenantService(secureStorage);
+    await tenantService.initialize();
+
     inventoryService = InventoryService(productRepository);
     syncService = SyncService(
       db: database,
