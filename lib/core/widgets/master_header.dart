@@ -219,6 +219,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                             controller: textController,
                             focusNode: focusNode,
                             onSubmitted: (value) => onFieldSubmitted(),
+                            style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
                               hintText:
                                   "Search featured pages or search in context...",
@@ -232,9 +233,13 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                                 size: 20,
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 10,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.only(
+                                top: 5,
+                                bottom: 0,
+                                left: 10,
+                                right: 10,
                               ),
                               suffixIcon: isTablet
                                   ? Padding(
@@ -242,24 +247,21 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                                         vertical: 8,
                                         horizontal: 8,
                                       ),
-                                      child: Container(
-                                        width: 40,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade200,
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          "⌘ K",
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black54,
-                                          ),
-                                        ),
-                                      ),
+                                      // child: Container(
+                                      //   width: 40,
+                                      //   alignment: Alignment.center,
+                                      //   decoration: BoxDecoration(
+                                      //     color: Colors.grey.shade200,
+                                      //     borderRadius: BorderRadius.circular(
+                                      //       4,
+                                      //     ),
+                                      //   ),
+                                      //   child: Icon(
+                                      //     Icons.center_focus_strong,
+                                      //     size: 18,
+                                      //     color: Colors.grey.shade600,
+                                      //   ),
+                                      // ),
                                     )
                                   : null,
                             ),
@@ -283,7 +285,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: ElevatedButton.icon(
-                    onPressed: () => context.push('/pos'),
+                    onPressed: () => context.go('/pos'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0F172A),
                       foregroundColor: Colors.white,
@@ -341,16 +343,19 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                   builder: (context, ref, child) {
                     final profileState = ref.watch(profileControllerProvider);
                     final userImage = profileState.profile?['userImage'];
+                    final hasValidImage =
+                        userImage != null &&
+                        userImage.toString().isNotEmpty &&
+                        userImage.toString().startsWith('http');
                     return CircleAvatar(
                       radius: 18,
                       backgroundColor: Colors.grey.shade300,
-                      backgroundImage:
-                          (userImage != null && userImage.toString().isNotEmpty)
+                      backgroundImage: hasValidImage
                           ? CachedNetworkImageProvider(userImage.toString())
-                          : const NetworkImage(
-                                  'https://i.pravatar.cc/150?img=11',
-                                )
-                                as ImageProvider,
+                          : null,
+                      child: !hasValidImage
+                          ? const Icon(Icons.person, size: 20, color: Colors.grey)
+                          : null,
                     );
                   },
                 ),

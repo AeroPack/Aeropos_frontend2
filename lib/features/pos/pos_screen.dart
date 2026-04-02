@@ -10,7 +10,7 @@ import 'package:ezo/features/pos/layouts/restaurant_layout.dart';
 import 'package:ezo/features/pos/layouts/retail_layout.dart';
 import 'package:ezo/features/pos/layouts/touch_layout.dart';
 import 'package:ezo/features/pos/layouts/dual_screen_layout.dart';
-import 'package:ezo/features/pos/widgets/pos_layout_selector.dart';
+
 import 'package:ezo/core/database/app_database.dart';
 import '../../core/models/sale.dart';
 import '../../core/widgets/pos_toast.dart';
@@ -923,21 +923,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
           ],
         ),
-        customActions: const [PosLayoutSelector(), SizedBox(width: 8)],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _buildSelectedLayout(
-          layoutType,
-          cartState,
-          cartNotifier,
-          products,
-          categories,
-          selectedCategoryId,
-          searchQuery,
-          onSearch,
-          onBack,
-        ),
+      body: _buildSelectedLayout(
+        layoutType,
+        cartState,
+        cartNotifier,
+        products,
+        categories,
+        selectedCategoryId,
+        searchQuery,
+        onSearch,
+        onBack,
       ),
     );
   }
@@ -1184,7 +1180,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     switch (type) {
       case PosLayoutType.compact:
         return CompactLayout(
-          key: const ValueKey('compact'),
+          key: const ValueKey('layout_compact'),
           cartState: cartState,
           cartNotifier: cartNotifier,
           products: products,
@@ -1202,10 +1198,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           onSetOverallDiscount: onSetOverallDiscount,
           onReset: onReset,
           onBack: onBack,
+          onSplitBill: onSplitBill,
+          onPrintReceipt: onPrintReceipt,
+          onOrderHold: onOrderHold,
+          onRecallOrder: onRecallOrder,
         );
       case PosLayoutType.restaurant:
         return RestaurantLayout(
-          key: const ValueKey('restaurant'),
+          key: const ValueKey('layout_restaurant'),
           cartState: cartState,
           cartNotifier: cartNotifier,
           products: products,

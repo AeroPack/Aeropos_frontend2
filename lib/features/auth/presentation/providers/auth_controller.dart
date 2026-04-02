@@ -339,6 +339,26 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> verifyEmail(String token) async {
+    state = AuthState.loading();
+    try {
+      await _authRepository.verifyEmail(token);
+      // Update state if already logged in (pending verification)
+      if (state.user != null) {
+        await _completeLogin();
+      } else {
+        state = AuthState.unauthenticated(
+          "Email verified successfully! Please login.",
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: _extractErrorMessage(e, "Verification failed. The link may be expired or invalid."),
+      );
+    }
+  }
+
   /// Complete login flow: sync data and load user
   Future<void> _completeLogin() async {
     await _syncService.pull();

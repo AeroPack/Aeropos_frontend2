@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
+import 'package:ezo/features/pos/widgets/common/product_card.dart';
+import 'package:ezo/features/pos/widgets/common/totals_display.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
+import 'package:ezo/core/theme/app_theme.dart';
 import 'package:ezo/core/database/app_database.dart';
-import 'package:ezo/core/widgets/product_image.dart';
-import 'base_pos_layout.dart';
 
 class CompactLayout extends BasePosLayout {
   const CompactLayout({
@@ -25,183 +28,726 @@ class CompactLayout extends BasePosLayout {
     required super.onSetOverallDiscount,
     required super.onReset,
     required super.onBack,
+    this.onSplitBill,
+    this.onPrintReceipt,
+    this.onOrderHold,
+    this.onRecallOrder,
   });
+
+  final VoidCallback? onSplitBill;
+  final VoidCallback? onPrintReceipt;
+  final VoidCallback? onOrderHold;
+  final VoidCallback? onRecallOrder;
 
   @override
   ConsumerState<CompactLayout> createState() => _CompactLayoutState();
 }
 
 class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
-  final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _discountRateController = TextEditingController();
-  final GlobalKey _sidebarKey = GlobalKey(debugLabel: 'billing_sidebar');
-  double _sidebarWidth = 420;
-  bool _isBillingOnLeft = false;
-  String? _selectedPaymentMethod;
-  static const double _minSidebarWidth = 320;
-  static const double _maxSidebarWidthRatio = 0.6;
-  static const double _dragHandleWidth = 6.0;
+  final _searchController = TextEditingController();
+  final _customerSearchController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool _showCart = true;
+  bool _showNotes = false;
+  bool _showBarcodeScan = false;
+  bool _showCustomerSearch = false;
+  String _selectedPaymentMethod = 'cash';
+  final List<ProductEntity> _recentItems = [];
+  final Set<int> _favoriteProductIds = {};
+  bool _showFavoritesOnly = false;
+
+  // Primary blue color scheme
+  static const Color _primaryBlue = Color(0xFF1976D2);
+  static const Color _primaryBlueLight = Color(0xFF42A5F5);
+  static const Color _primaryBlueDark = Color(0xFF0D47A1);
+  static const Color _accentBlue = Color(0xFF2196F3);
 
   @override
   void initState() {
     super.initState();
     _searchController.text = widget.searchQuery;
-    _discountRateController.text = widget.cartState.overallDiscount.toString();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _discountRateController.dispose();
+    _customerSearchController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listen for external changes to reset discount field if needed
-    ref.listen(cartProvider, (previous, next) {
-      if (next.items.isEmpty &&
-          (previous != null && previous.items.isNotEmpty)) {
-        _discountRateController.text = "0";
-        // Reset payment method when cart is cleared
-        setState(() {
-          _selectedPaymentMethod = null;
-        });
-      }
-    });
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final double totalWidth = constraints.maxWidth;
-          // True mobile: < 600px. Tablet/desktop: >= 600px
-          final bool isMobile = totalWidth < 600;
-          final double productAreaWidth = isMobile
-              ? totalWidth
-              : totalWidth - _sidebarWidth - _dragHandleWidth;
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      children: [
+        Expanded(
+          flex: _showCart ? 6 : 9,
+          child: Column(
             children: [
-              if (!isMobile && _isBillingOnLeft) ...[
-                _billingSidebar(),
-                _dragHandle(totalWidth, true),
-              ],
-
-              // --- PRODUCTS & CATEGORIES ---
+              _buildToolbar(),
+              widget.categories.when(
+                data: (cats) => _buildCategoryTabs(cats),
+                loading: () => const SizedBox(height: 40),
+                error: (e, _) =>
+                    SizedBox(height: 40, child: Center(child: Text('$e'))),
+              ),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: isMobile ? 4 : 8),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        isMobile ? 12 : 24,
-                        isMobile ? 8 : 16,
-                        isMobile ? 12 : 24,
-                        isMobile ? 4 : 8,
-                      ),
-                      child: const Row(
-                        children: [
-                          Text(
-                            "Categories",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildCategoryList(isMobile),
-                    _buildProductGridHeader(productAreaWidth, isMobile),
-                    Expanded(
-                      child: _buildProductGrid(productAreaWidth, isMobile),
-                    ),
-                    if (isMobile) const SizedBox(height: 80),
-                  ],
+                child: widget.products.when(
+                  data: (products) => _buildProductGrid(products),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Error: $e')),
                 ),
               ),
-
-              if (!isMobile && !_isBillingOnLeft) ...[
-                _dragHandle(totalWidth, false),
-                _billingSidebar(),
-              ],
             ],
-          );
-        },
+          ),
+        ),
+        if (_showCart)
+          Container(
+            width: 380,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(-5, 0),
+                ),
+              ],
+              border: Border(left: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: Column(
+              children: [
+                _buildCartHeader(),
+                Expanded(
+                  child: widget.cartState.items.isEmpty
+                      ? _buildEmptyCart()
+                      : _buildCartItems(),
+                ),
+                if (_showNotes) _buildNotesSection(),
+                _buildQuickActionsBar(),
+                PosTotalsDisplay(
+                  cartState: widget.cartState,
+                  onCheckout: () => widget.onCheckout(shouldSave: true),
+                  compact: true,
+                ),
+                _buildPaymentSection(),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
       ),
-      bottomNavigationBar: LayoutBuilder(
-        builder: (context, constraints) {
-          // Must recompute isMobile for bottom nav independently
-          final double w = MediaQuery.of(context).size.width;
-          return w < 600
-              ? _buildMobileBottomBar(widget.cartState)
-              : const SizedBox.shrink();
-        },
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: widget.onBack,
+            tooltip: 'Back',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _primaryBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.storefront, color: _primaryBlue, size: 22),
+          ),
+          const SizedBox(width: 12),
+          // Product Search Bar
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 10),
+                  Icon(Icons.search, color: Colors.grey[400], size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: _showBarcodeScan
+                            ? 'Scan or enter barcode...'
+                            : 'Search products...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        isDense: true,
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 13,
+                        ),
+                      ),
+                      onChanged: widget.onSearch,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _showBarcodeScan ? Icons.qr_code_scanner : Icons.qr_code,
+                      size: 18,
+                      color: _showBarcodeScan ? _accentBlue : Colors.grey[400],
+                    ),
+                    onPressed: () =>
+                        setState(() => _showBarcodeScan = !_showBarcodeScan),
+                    tooltip: 'Scan Barcode',
+                  ),
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.grey[400],
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        widget.onSearch('');
+                      },
+                    ),
+                  const SizedBox(width: 4),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Favorites Button
+          _compactToolbarBtn(
+            Icons.favorite_border,
+            'Favorites',
+            () => setState(() {
+              _showFavoritesOnly = !_showFavoritesOnly;
+            }),
+            isActive: _showFavoritesOnly,
+          ),
+          const SizedBox(width: 8),
+          // Customer Search Bar
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 10),
+                  Icon(Icons.person_search, color: Colors.grey[400], size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: TextField(
+                      controller: _customerSearchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search customer...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        isDense: true,
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 13,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        if (value.isNotEmpty) {
+                          ref.read(customerSearchProvider.notifier).state =
+                              value;
+                        } else {
+                          ref.read(customerSearchProvider.notifier).state = '';
+                        }
+                      },
+                    ),
+                  ),
+                  if (_customerSearchController.text.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.grey[400],
+                      ),
+                      onPressed: () {
+                        _customerSearchController.clear();
+                        ref.read(customerSearchProvider.notifier).state = '';
+                      },
+                    ),
+                  const SizedBox(width: 4),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _buildAddCustomerButton(),
+        ],
       ),
     );
   }
 
-  Widget _dragHandle(double totalWidth, bool isOnLeft) {
-    return MouseRegion(
-      key: ValueKey('drag_handle_${isOnLeft ? 'left' : 'right'}'),
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        onHorizontalDragUpdate: (details) {
-          setState(() {
-            if (isOnLeft) {
-              _sidebarWidth += details.delta.dx;
-            } else {
-              _sidebarWidth -= details.delta.dx;
-            }
-            final maxWidth = totalWidth * _maxSidebarWidthRatio;
-            _sidebarWidth = _sidebarWidth.clamp(_minSidebarWidth, maxWidth);
-          });
-        },
+  Widget _compactToolbarBtn(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    bool isActive = false,
+  }) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
         child: Container(
-          width: _dragHandleWidth,
-          color: Colors.transparent,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive
+                ? _primaryBlue.withValues(alpha: 0.1)
+                : Colors.transparent,
+            border: Border.all(
+              color: isActive ? _primaryBlue : Colors.grey[200]!,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // The drag line indicator
-              Container(
-                width: 2,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(1),
+              Icon(
+                icon,
+                size: 18,
+                color: isActive ? _primaryBlue : Colors.grey[600],
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isActive ? _primaryBlue : Colors.grey[600],
                 ),
               ),
-              // The switch sides button
-              Positioned(
-                child: GestureDetector(
-                  onTap: () =>
-                      setState(() => _isBillingOnLeft = !_isBillingOnLeft),
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey.shade300),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 4,
-                        ),
-                      ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabs(List<dynamic> categories) {
+    return Container(
+      height: 44,
+      color: Colors.white,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        children: [
+          _compactTabItem(
+            'ALL PRODUCTS',
+            widget.selectedCategoryId == null,
+            () => widget.onCategoryTap(null),
+          ),
+          ...categories.map(
+            (c) => _compactTabItem(
+              c.name.toUpperCase(),
+              widget.selectedCategoryId == c.id,
+              () => widget.onCategoryTap(c.id),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactTabItem(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        alignment: Alignment.center,
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? _primaryBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? _primaryBlue : Colors.grey[200]!),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : Colors.grey[600],
+            fontSize: 11,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductGrid(List<ProductEntity> products) {
+    List<ProductEntity> displayProducts = products;
+
+    if (_showFavoritesOnly) {
+      displayProducts = products
+          .where((p) => _favoriteProductIds.contains(p.id))
+          .toList();
+    }
+
+    if (displayProducts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _showFavoritesOnly
+                  ? Icons.favorite_border
+                  : Icons.inventory_2_outlined,
+              size: 48,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _showFavoritesOnly ? 'No favorites added' : 'No products found',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _showFavoritesOnly
+                  ? 'Tap ♡ on products to add to favorites'
+                  : 'Try different search or category',
+              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: displayProducts.length,
+      itemBuilder: (_, i) => _buildCompactProductCard(displayProducts[i]),
+    );
+  }
+
+  Widget _buildCompactProductCard(ProductEntity product) {
+    final isFavorite = _favoriteProductIds.contains(product.id);
+    final inCart = widget.cartState.items.any(
+      (i) => i.product.id == product.id,
+    );
+
+    return Stack(
+      children: [
+        PosProductCard(
+          product: product,
+          onTap: () => _addToCart(product),
+          size: PosCardSize.small,
+          showSku: false,
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                if (isFavorite) {
+                  _favoriteProductIds.remove(product.id);
+                } else {
+                  _favoriteProductIds.add(product.id);
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+              child: Icon(
+                isFavorite ? Icons.favorite : Icons.favorite_border,
+                size: 14,
+                color: isFavorite ? Colors.amber : Colors.grey[400],
+              ),
+            ),
+          ),
+        ),
+        if (inCart)
+          Positioned(
+            top: 4,
+            left: 4,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: _accentBlue,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, size: 10, color: Colors.white),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _addToCart(ProductEntity product) {
+    widget.cartNotifier.addProduct(product);
+    setState(() {
+      _recentItems.removeWhere((p) => p.id == product.id);
+      _recentItems.insert(0, product);
+      if (_recentItems.length > 8) {
+        _recentItems.removeLast();
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${product.name} added to cart'),
+        backgroundColor: _primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildCartHeader() {
+    final customer = widget.cartState.selectedCustomer;
+    final itemCount = widget.cartState.items.length;
+    final itemTotal = widget.cartState.total;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: Row(
+        children: [
+          if (customer != null) ...[
+            Icon(Icons.person, size: 16, color: _primaryBlue),
+            const SizedBox(width: 4),
+            Text(
+              customer.name,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _primaryBlue,
+              ),
+            ),
+          ] else ...[
+            Text(
+              'CART',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: _primaryBlue,
+              ),
+            ),
+          ],
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _primaryBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$itemCount item${itemCount != 1 ? 's' : ''}',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _primaryBlue,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Rs ${itemTotal.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: _primaryBlueDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomerSearchPanel() {
+    final customer = widget.cartState.selectedCustomer;
+    final customerSearch = ref.watch(customerSearchProvider);
+    final customersAsync = ref.watch(posCustomerListProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (customer != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: _primaryBlue.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _primaryBlue.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: _primaryBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      customer.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: _primaryBlue,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.swap_horiz,
-                      size: 16,
-                      color: Colors.grey.shade700,
+                  ),
+                ],
+              ),
+            ),
+          if (customerSearch.isNotEmpty || _showCustomerSearch)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: customersAsync.when(
+                data: (customers) {
+                  final filteredCustomers = customers.where((c) {
+                    final searchLower = customerSearch.toLowerCase();
+                    return c.name.toLowerCase().contains(searchLower) ||
+                        (c.phone?.contains(searchLower) ?? false) ||
+                        (c.email?.contains(searchLower) ?? false);
+                  }).toList();
+
+                  if (filteredCustomers.isEmpty && customerSearch.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text('Type to search customers'),
+                      ),
+                    );
+                  }
+
+                  return ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    children: [
+                      if (customerSearch.isNotEmpty)
+                        _compactCustomerOption(
+                          name: 'Create New: "$customerSearch"',
+                          details: 'Add as new customer',
+                          icon: Icons.person_add,
+                          onTap: () {
+                            widget.onShowAddCustomerDialog();
+                            _customerSearchController.clear();
+                            ref.read(customerSearchProvider.notifier).state =
+                                '';
+                            setState(() => _showCustomerSearch = false);
+                          },
+                        ),
+                      ...filteredCustomers.map(
+                        (c) => _compactCustomerOption(
+                          name: c.name,
+                          details: c.phone ?? c.email ?? 'No contact',
+                          icon: Icons.person,
+                          onTap: () {
+                            widget.cartNotifier.setCustomer(c);
+                            _customerSearchController.clear();
+                            ref.read(customerSearchProvider.notifier).state =
+                                '';
+                            setState(() => _showCustomerSearch = false);
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (err, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Error: $err',
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                 ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddCustomerButton() {
+    return Tooltip(
+      message: 'Add Customer',
+      child: InkWell(
+        onTap: () {
+          widget.onShowAddCustomerDialog();
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _primaryBlue.withValues(alpha: 0.1),
+            border: Border.all(color: _primaryBlue.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.person_add_alt_1, size: 16, color: _primaryBlue),
+              const SizedBox(width: 6),
+              Text(
+                'Add Customer',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _primaryBlue,
+                ),
+              ),
             ],
           ),
         ),
@@ -209,104 +755,44 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _billingSidebar() {
-    return Container(
-      key: _sidebarKey,
-      width: _sidebarWidth,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
-          ),
-        ],
-      ),
-      child: _buildCartSidebar(false),
-    );
-  }
-
-  Widget _buildCategoryList(bool isMobile) {
-    final double listHeight = isMobile ? 70 : 100;
-    final double itemWidth = isMobile ? 80 : 100;
-    final double hPad = isMobile ? 12 : 24;
-
-    return widget.categories.when(
-      data: (categories) => SizedBox(
-        height: listHeight,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(horizontal: hPad),
-          itemCount: categories.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return _buildCategoryItem(
-                name: "All",
-                count: "${categories.length}",
-                icon: Icons.grid_view,
-                isActive: widget.selectedCategoryId == null,
-                onTap: () => widget.onCategoryTap(null),
-                width: itemWidth,
-                isMobile: isMobile,
-              );
-            }
-            final category = categories[index - 1];
-            return _buildCategoryItem(
-              name: category.name,
-              count: "-",
-              icon: Icons.category_outlined,
-              isActive: widget.selectedCategoryId == category.id,
-              onTap: () => widget.onCategoryTap(category.id),
-              width: itemWidth,
-              isMobile: isMobile,
-            );
-          },
-        ),
-      ),
-      loading: () => const SizedBox(
-        height: 70,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-      error: (err, stack) => Center(child: Text("Error: $err")),
-    );
-  }
-
-  Widget _buildCategoryItem({
+  Widget _compactCustomerOption({
     required String name,
-    required String count,
+    required String details,
     required IconData icon,
-    required bool isActive,
     required VoidCallback onTap,
-    double width = 100,
-    bool isMobile = false,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        width: width,
-        margin: EdgeInsets.only(right: isMobile ? 8 : 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(isMobile ? 8 : 12),
-          border: Border.all(
-            color: isActive ? Colors.orange : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
           children: [
-            Icon(icon, color: isActive ? Colors.orange : Colors.black54),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: _primaryBlue.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: _primaryBlue),
             ),
-            Text(
-              "$count items",
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    details,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -314,854 +800,307 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _buildProductGridHeader(double availableWidth, bool isMobile) {
-    final double hPad = isMobile ? 12 : 24;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        hPad,
-        isMobile ? 8 : 16,
-        hPad,
-        isMobile ? 8 : 12,
-      ),
-      child: Row(
+  Widget _buildEmptyCart() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 12),
           Text(
-            "Products",
+            'Cart is empty',
             style: TextStyle(
-              fontSize: isMobile ? 15 : 18,
-              fontWeight: FontWeight.bold,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 36,
-              child: TextField(
-                controller: _searchController,
-                onChanged: widget.onSearch,
-                decoration: InputDecoration(
-                  hintText: "Search products...",
-                  hintStyle: const TextStyle(fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-            ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap products to add them to cart',
+            style: TextStyle(color: Colors.grey[400], fontSize: 12),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProductGrid(double availableWidth, bool isMobile) {
-    final double hPad = isMobile ? 12 : 24;
-    final double spacing = isMobile ? 12 : 24;
-    // Determine columns: at least 2, fit as many ~120-150px wide cards as possible
-    final int minCardWidth = isMobile ? 130 : 150;
-    int crossAxisCount = (availableWidth / minCardWidth).floor();
-    if (crossAxisCount < 2) crossAxisCount = 2;
-
-    return widget.products.when(
-      data: (productList) {
-        if (productList.isEmpty) {
-          return const Center(
-            child: Text(
-              "No products found",
-              style: TextStyle(color: Colors.grey),
-            ),
-          );
-        }
-        return GridView.builder(
-          padding: EdgeInsets.fromLTRB(hPad, 0, hPad, hPad),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: isMobile ? 0.75 : 0.8,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: spacing,
-          ),
-          itemCount: productList.length,
-          itemBuilder: (context, index) {
-            final product = productList[index];
-            return InkWell(
-              onTap: () => widget.onProductTap(product),
-              child: _productCard(product),
-            );
-          },
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text("Error: $err")),
+  Widget _buildCartItems() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(8),
+      itemCount: widget.cartState.items.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 6),
+      itemBuilder: (context, i) =>
+          _compactCartItemTile(widget.cartState.items[i]),
     );
   }
 
-  Widget _buildCartSidebar(bool isMobile) {
-    return Column(
-      children: [
-        _buildOrderListHeader(widget.cartState.items.length),
-        _buildCustomerSearch(),
-        const Divider(height: 1),
-        Expanded(
-          child: widget.cartState.items.isEmpty
-              ? _buildEmptyCart()
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: widget.cartState.items.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = widget.cartState.items[index];
-                    return _buildCartItem(item, widget.cartNotifier);
-                  },
-                ),
-        ),
-        const Divider(height: 1),
-        // Summary section is scrollable so it never overflows on small screens
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 460),
-          child: SingleChildScrollView(
-            child: _buildSummarySection(widget.cartState),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCustomerSearch() {
-    final customerSearch = ref.watch(customerSearchProvider);
-    final customersAsync = ref.watch(posCustomerListProvider);
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.cartState.selectedCustomer != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.person, color: Color(0xFF16A34A), size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.cartState.selectedCustomer!.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF166534),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      widget.cartNotifier.setCustomer(null);
-                      ref.read(customerSearchProvider.notifier).state = '';
-                    },
-                    icon: const Icon(
-                      Icons.close,
-                      size: 20,
-                      color: Color(0xFF166534),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    splashRadius: 20,
-                  ),
-                ],
-              ),
-            )
-          else
-            Column(
-              children: [
-                TextField(
-                  onChanged: (val) =>
-                      ref.read(customerSearchProvider.notifier).state = val,
-                  decoration: InputDecoration(
-                    hintText: "Search Customer...",
-                    prefixIcon: const Icon(Icons.person_search, size: 18),
-                    suffixIcon: IconButton(
-                      icon: const Icon(
-                        Icons.add_circle_outline,
-                        color: Color(0xFF007AFF),
-                        size: 20,
-                      ),
-                      onPressed: widget.onShowAddCustomerDialog,
-                      tooltip: "Add New Customer",
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
-                ),
-                if (customerSearch.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: customersAsync.when(
-                      data: (customers) {
-                        return ListView(
-                          shrinkWrap: true,
-                          children: [
-                            ListTile(
-                              leading: const Icon(
-                                Icons.person_outline,
-                                size: 20,
-                              ),
-                              title: const Text(
-                                "Walk-in Customer",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              onTap: () {
-                                widget.cartNotifier.setCustomer(null);
-                                ref
-                                        .read(customerSearchProvider.notifier)
-                                        .state =
-                                    '';
-                              },
-                            ),
-                            const Divider(height: 1),
-                            if (customers.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: Text(
-                                  "No registered customers found",
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              )
-                            else
-                              ...customers.map(
-                                (customer) => Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ListTile(
-                                      title: Text(
-                                        customer.name,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                      subtitle: customer.phone != null
-                                          ? Text(
-                                              customer.phone!,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                              ),
-                                            )
-                                          : null,
-                                      onTap: () {
-                                        widget.cartNotifier.setCustomer(
-                                          customer,
-                                        );
-                                        ref
-                                                .read(
-                                                  customerSearchProvider
-                                                      .notifier,
-                                                )
-                                                .state =
-                                            '';
-                                      },
-                                    ),
-                                    const Divider(height: 1),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                      loading: () => const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                      error: (err, _) => Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text("Error: $err"),
-                      ),
-                    ),
-                  ),
-                if (customerSearch.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      "Default: Walk-in Customer",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummarySection(CartState cartState) {
+  Widget _compactCartItemTile(CartItem item) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Payment Summary",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          const SizedBox(height: 12),
-          _summaryRow(
-            "Sub Total",
-            "Rs ${cartState.subtotal.toStringAsFixed(2)}",
-          ),
-          _summaryRow("GST", "Rs ${cartState.taxAmount.toStringAsFixed(2)}"),
-          _summaryRow(
-            "Total Discount",
-            "Rs ${cartState.totalDiscount.toStringAsFixed(2)}",
-            isRed: cartState.totalDiscount > 0,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _discountRateController,
-                    decoration: InputDecoration(
-                      labelText: "Add Bill Discount",
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (val) {
-                      final d = double.tryParse(val) ?? 0.0;
-                      widget.onSetOverallDiscount(
-                        d,
-                        cartState.isOverallPercent,
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _discountTypeToggle("Rs", !cartState.isOverallPercent, () {
-                      widget.onSetOverallDiscount(
-                        cartState.overallDiscount,
-                        false,
-                      );
-                    }),
-                    VerticalDivider(width: 1, color: Colors.grey.shade300),
-                    _discountTypeToggle("%", cartState.isOverallPercent, () {
-                      widget.onSetOverallDiscount(
-                        cartState.overallDiscount,
-                        true,
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Payment Method Section
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Payment Method",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              if (_selectedPaymentMethod != null)
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _selectedPaymentMethod = null),
-                  child: const Text(
-                    "Clear",
-                    style: TextStyle(fontSize: 12, color: Colors.red),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildPaymentOption(
-                icon: Icons.attach_money,
-                label: "Cash",
-                isSelected: _selectedPaymentMethod == "cash",
-                onTap: () => setState(() => _selectedPaymentMethod = "cash"),
-              ),
-              const SizedBox(width: 12),
-              _buildPaymentOption(
-                icon: Icons.credit_card,
-                label: "Debit Card",
-                isSelected: _selectedPaymentMethod == "card",
-                onTap: () => setState(() => _selectedPaymentMethod = "card"),
-              ),
-              const SizedBox(width: 12),
-              _buildPaymentOption(
-                icon: Icons.qr_code_scanner,
-                label: "Scan",
-                isSelected: _selectedPaymentMethod == "scan",
-                onTap: () => setState(() => _selectedPaymentMethod = "scan"),
-              ),
-            ],
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Divider(),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Amount to be Paid",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              ),
-              Text(
-                "Rs ${cartState.total.toInt()}",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF007AFF),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed:
-                  cartState.items.isEmpty || _selectedPaymentMethod == null
-                  ? null
-                  : () => widget.onCheckout(
-                      shouldSave: true,
-                      paymentMethod: _selectedPaymentMethod,
-                    ),
-              child: const Text(
-                "Checkout",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 2.5,
-            children: [
-              _gridActionBtn(
-                "Print",
-                Icons.print,
-                onTap: cartState.items.isEmpty
-                    ? null
-                    : () => widget.onCheckout(
-                        shouldSave: false,
-                        paymentMethod: _selectedPaymentMethod,
-                      ),
-              ),
-              _gridActionBtn(
-                "Invoice",
-                Icons.receipt_outlined,
-                onTap: cartState.items.isEmpty
-                    ? null
-                    : () => widget.onCheckout(
-                        shouldSave: false,
-                        paymentMethod: _selectedPaymentMethod,
-                      ),
-              ),
-              _gridActionBtn(
-                "Settings",
-                Icons.settings,
-                onTap: widget.onOpenInvoiceSettings,
-              ),
-              _gridActionBtn("Cancel", Icons.close, onTap: widget.onReset),
-              _gridActionBtn("Void", Icons.bolt, onTap: null),
-              _gridActionBtn(
-                "Sales History",
-                Icons.list_alt,
-                onTap: widget.onOpenSalesHistory,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF007AFF).withValues(alpha: 0.1)
-                : Colors.grey.shade50,
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF007AFF)
-                  : Colors.grey.shade300,
-              width: isSelected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                color: isSelected
-                    ? const Color(0xFF007AFF)
-                    : Colors.grey.shade600,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected
-                      ? const Color(0xFF007AFF)
-                      : Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderListHeader(int itemCount) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            "Ordered Menus",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  "Total Menus : ",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  "$itemCount",
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCartItem(CartItem item, CartNotifier cartNotifier) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF007AFF).withValues(alpha: 0.2),
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: ProductImage(product: item.product, size: 50),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.product.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "SKU: ${item.product.sku ?? 'N/A'}",
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-              _qtyControl(item, cartNotifier),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => widget.onShowItemDiscount(item),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: item.manualDiscount > 0
-                          ? Colors.red.shade300
-                          : Colors.grey.shade200,
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                    color: item.manualDiscount > 0 ? Colors.red.shade50 : null,
-                  ),
-                  child: Text(
-                    item.manualDiscount > 0
-                        ? "-${item.isPercentDiscount ? '${item.manualDiscount.toInt()}%' : 'Rs ${item.manualDiscount.toInt()}'}"
-                        : "Discount",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: item.manualDiscount > 0
-                          ? Colors.red
-                          : Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () => cartNotifier.removeProduct(item.product),
-                icon: const Icon(Icons.close, size: 14, color: Colors.grey),
-                constraints: const BoxConstraints(),
-                padding: EdgeInsets.zero,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _itemDetailCol(
-                "Item Rate",
-                "Rs ${item.product.price.toStringAsFixed(2)}",
-              ),
-              _itemDetailCol(
-                "Amount",
-                "Rs ${item.subtotal.toStringAsFixed(2)}",
-              ),
-              _itemDetailCol(
-                "Total",
-                "Rs ${item.total.toStringAsFixed(2)}",
-                isBold: true,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _qtyControl(CartItem item, CartNotifier cartNotifier) {
-    return Row(
-      children: [
-        _circleBtn(
-          Icons.remove,
-          () => cartNotifier.updateQuantity(item.product, item.quantity - 1),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            "${item.quantity}",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        _circleBtn(
-          Icons.add,
-          () => cartNotifier.updateQuantity(item.product, item.quantity + 1),
-        ),
-      ],
-    );
-  }
-
-  Widget _circleBtn(IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: 14),
-      ),
-    );
-  }
-
-  Widget _buildMobileBottomBar(CartState cartState) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[100]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(
-                "${cartState.items.length} Items",
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              Expanded(
+                child: Text(
+                  item.product.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               Text(
-                "Rs ${cartState.total.toInt()}",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                'Rs ${item.total.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: _primaryBlueDark,
                 ),
               ),
             ],
+          ),
+          if (item.product.sku != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'SKU: ${item.product.sku}',
+                style: TextStyle(color: Colors.grey[500], fontSize: 10),
+              ),
+            ),
+          if (item.manualDiscount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  item.isPercentDiscount
+                      ? '${item.manualDiscount.toStringAsFixed(0)}% OFF'
+                      : 'Rs ${item.manualDiscount.toStringAsFixed(2)} OFF',
+                  style: TextStyle(
+                    color: Colors.green[700],
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _compactQtyButton(
+                Icons.remove,
+                () => widget.cartNotifier.updateQuantity(
+                  item.product,
+                  item.quantity - 1,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _showQuantityDialog(item),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    '${item.quantity}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+              _compactQtyButton(
+                Icons.add,
+                () => widget.cartNotifier.updateQuantity(
+                  item.product,
+                  item.quantity + 1,
+                ),
+              ),
+              const Spacer(),
+              _compactIconBtn(
+                Icons.local_offer_outlined,
+                'Discount',
+                () => widget.onShowItemDiscount(item),
+              ),
+              const SizedBox(width: 4),
+              _compactIconBtn(
+                Icons.delete_outline,
+                'Remove',
+                () => widget.cartNotifier.removeProduct(item.product),
+                isDestructive: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactQtyButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: _primaryBlue.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: _primaryBlue.withValues(alpha: 0.2)),
+        ),
+        child: Icon(icon, size: 14, color: _primaryBlue),
+      ),
+    );
+  }
+
+  Widget _compactIconBtn(
+    IconData icon,
+    String tooltip,
+    VoidCallback onTap, {
+    bool isDestructive = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isDestructive ? Colors.amber : Colors.grey[500],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showQuantityDialog(CartItem item) {
+    final controller = TextEditingController(text: '${item.quantity}');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SET QUANTITY',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+                color: _primaryBlue,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.product.name,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [1, 2, 3, 5, 10].map((qty) {
+                return InkWell(
+                  onTap: () => controller.text = qty.toString(),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: int.tryParse(controller.text) == qty
+                          ? _primaryBlue
+                          : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$qty',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: int.tryParse(controller.text) == qty
+                            ? Colors.white
+                            : Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+              autofocus: true,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF002140),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              backgroundColor: _primaryBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
             onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                builder: (context) => DraggableScrollableSheet(
-                  initialChildSize: 0.9,
-                  minChildSize: 0.5,
-                  maxChildSize: 0.95,
-                  expand: false,
-                  builder: (context, scrollController) => Column(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 12),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Expanded(child: _buildCartSidebar(true)),
-                    ],
-                  ),
-                ),
-              );
+              final qty = double.tryParse(controller.text) ?? 1.0;
+              widget.cartNotifier.updateQuantity(item.product, qty);
+              Navigator.pop(ctx);
             },
             child: const Text(
-              "View Cart",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+              'UPDATE',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1169,135 +1108,243 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
-  Widget _productCard(ProductEntity product) {
+  Widget _buildNotesSection() {
     return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: TextField(
+        controller: _notesController,
+        maxLines: 2,
+        decoration: InputDecoration(
+          hintText:
+              'Add order notes (e.g., special instructions, gift wrap)...',
+          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 11),
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey[200]!),
+          ),
+          contentPadding: const EdgeInsets.all(10),
+          isDense: true,
+          prefixIcon: Icon(
+            Icons.note_outlined,
+            size: 16,
+            color: Colors.grey[400],
+          ),
+        ),
+        style: const TextStyle(fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade100),
+        color: Colors.grey[50],
+        border: Border(
+          top: BorderSide(color: Colors.grey[100]!),
+          bottom: BorderSide(color: Colors.grey[100]!),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Center(child: ProductImage(product: product, size: 150)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              product.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Text(
-              "Rs ${product.price.toInt()}",
-              style: const TextStyle(
-                color: Color(0xFF00A78E),
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyCart() => const Center(
-    child: Text("No products in cart", style: TextStyle(color: Colors.grey)),
-  );
-
-  Widget _summaryRow(String label, String value, {bool isRed = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: isRed ? Colors.red : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
+          _compactQuickAction(Icons.receipt, 'Split Bill', widget.onSplitBill),
+          _compactQuickAction(Icons.print, 'Print', widget.onPrintReceipt),
+          _compactQuickAction(
+            Icons.pause_circle_outline,
+            'Hold',
+            widget.onOrderHold,
           ),
-          Text(
-            value,
-            style: TextStyle(
-              color: isRed ? Colors.red : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
+          _compactQuickAction(Icons.history, 'Recall', widget.onRecallOrder),
+          _compactQuickAction(
+            Icons.note_add_outlined,
+            'Notes',
+            () => setState(() => _showNotes = !_showNotes),
+            isActive: _showNotes,
+          ),
+          _compactQuickAction(
+            Icons.delete_sweep_outlined,
+            'Clear All',
+            widget.onReset,
+            isDestructive: true,
           ),
         ],
       ),
     );
   }
 
-  Widget _discountTypeToggle(
+  Widget _compactQuickAction(
+    IconData icon,
     String label,
-    bool isSelected,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.center,
-        color: isSelected ? const Color(0xFF007AFF) : Colors.transparent,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black87,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 12,
+    VoidCallback? onTap, {
+    bool isDestructive = false,
+    bool isActive = false,
+  }) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive
+                ? _primaryBlue.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isDestructive
+                    ? Colors.deepOrange
+                    : isActive
+                    ? _primaryBlue
+                    : Colors.grey[600],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: isDestructive
+                      ? Colors.deepOrange
+                      : isActive
+                      ? _primaryBlue
+                      : Colors.grey[600],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _gridActionBtn(String label, IconData icon, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
+  Widget _buildPaymentSection() {
+    final isEmpty = widget.cartState.items.isEmpty;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Column(
+        children: [
+          if (!isEmpty) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _compactPaymentChip(
+                    'Cash',
+                    Icons.payments_outlined,
+                    'cash',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _compactPaymentChip('Card', Icons.credit_card, 'card'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _compactPaymentChip('QR/UPI', Icons.qr_code, 'qr_upi'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: isEmpty
+                  ? null
+                  : () => widget.onCheckout(
+                      shouldSave: true,
+                      paymentMethod: _selectedPaymentMethod,
+                    ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                disabledBackgroundColor: Colors.grey[200],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(_getPaymentIcon(_selectedPaymentMethod), size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEmpty
+                        ? 'Cart is empty'
+                        : 'PROCEED TO PAYMENT • Rs ${widget.cartState.total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getPaymentIcon(String method) {
+    switch (method) {
+      case 'cash':
+        return Icons.payments_outlined;
+      case 'card':
+        return Icons.credit_card;
+      case 'qr_upi':
+        return Icons.qr_code;
+      default:
+        return Icons.payment;
+    }
+  }
+
+  Widget _compactPaymentChip(String label, IconData icon, String method) {
+    final selected = _selectedPaymentMethod == method;
+    return InkWell(
+      onTap: () => setState(() => _selectedPaymentMethod = method),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade200),
-          borderRadius: BorderRadius.circular(8),
+          color: selected ? _primaryBlue : Colors.grey[50],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? _primaryBlue : Colors.grey[200]!,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: Colors.grey.shade700),
-            const SizedBox(width: 4),
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? Colors.white : Colors.grey[600],
+            ),
+            const SizedBox(width: 6),
             Text(
               label,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : Colors.grey[600],
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _itemDetailCol(String label, String value, {bool isBold = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }

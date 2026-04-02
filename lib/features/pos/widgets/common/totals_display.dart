@@ -45,16 +45,22 @@ class PosTotalsDisplay extends StatelessWidget {
                 ),
               ),
             ),
-          _row('Sub Total', 'Rs ${cartState.subtotal.toStringAsFixed(2)}',
-              fontSize: fontSize),
-          _row('Tax (GST)', 'Rs ${cartState.taxAmount.toStringAsFixed(2)}',
-              fontSize: fontSize),
+          _row(
+            'Sub Total',
+            'Rs ${cartState.subtotal.toStringAsFixed(2)}',
+            fontSize: fontSize,
+          ),
+          _row(
+            'Tax (GST)',
+            'Rs ${cartState.taxAmount.toStringAsFixed(2)}',
+            fontSize: fontSize,
+          ),
           if (cartState.totalDiscount > 0)
             _row(
               'Discount',
               '-Rs ${cartState.totalDiscount.toStringAsFixed(2)}',
               fontSize: fontSize,
-              isRed: true,
+              isGreen: true,
             ),
           const SizedBox(height: AppSpacing.md),
           Container(
@@ -72,7 +78,7 @@ class PosTotalsDisplay extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     fontSize: compact ? 14 : 15,
                     letterSpacing: 0.5,
-                    color: AppColors.text,
+                    color: Colors.black,
                   ),
                 ),
                 Text(
@@ -80,7 +86,7 @@ class PosTotalsDisplay extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: totalFontSize,
-                    color: AppColors.primary,
+                    color: Colors.black,
                   ),
                 ),
               ],
@@ -94,14 +100,13 @@ class PosTotalsDisplay extends StatelessWidget {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.surface,
+                  foregroundColor: Colors.black,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed:
-                    cartState.items.isEmpty ? null : onCheckout,
+                onPressed: cartState.items.isEmpty ? null : onCheckout,
                 child: Text(
                   'COMPLETE ORDER',
                   style: TextStyle(
@@ -118,8 +123,13 @@ class PosTotalsDisplay extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value,
-      {bool isRed = false, double fontSize = 16}) {
+  Widget _row(
+    String label,
+    String value, {
+    bool isRed = false,
+    bool isGreen = false,
+    double fontSize = 16,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -128,7 +138,9 @@ class PosTotalsDisplay extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: isRed ? AppColors.error : AppColors.grey600,
+              color: isGreen
+                  ? Colors.green
+                  : (isRed ? AppColors.error : AppColors.grey600),
               fontWeight: FontWeight.bold,
               fontSize: fontSize,
             ),
@@ -136,7 +148,9 @@ class PosTotalsDisplay extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: isRed ? AppColors.error : AppColors.text,
+              color: isGreen
+                  ? Colors.green
+                  : (isRed ? AppColors.error : AppColors.text),
               fontWeight: FontWeight.w800,
               fontSize: fontSize,
             ),

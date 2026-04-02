@@ -185,7 +185,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _onGroupTap(SidebarGroup group) {
     if (group.routePush != null) {
-      context.push(group.routePush!);
+      context.go(group.routePush!);
       return;
     }
     if (group.isStandalone && group.branchIndex != null) {
@@ -255,8 +255,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // ── Desktop layout ─────────────────────────────────────────────────────────
     if (isDesktop) {
-      // Always extended (full-width labels always visible)
-      final sidebarWidth = 240.0;
+      // Sidebar width based on expanded/collapsed state
+      final sidebarWidth = _isRailExtended ? 240.0 : 72.0;
 
       return Scaffold(
         appBar: appBar,
@@ -273,7 +273,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
                   for (final group in visibleGroups)
-                    _buildSidebarGroup(group, user, true),
+                    _buildSidebarGroup(group, user, _isRailExtended),
                 ],
               ),
             ),
@@ -330,7 +330,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         onDestinationSelected: (i) {
           final item = bottomItems[i];
           if (item.routePush != null) {
-            context.push(item.routePush!);
+            context.go(item.routePush!);
           } else {
             _onBranchSelected(item.branchIndex);
           }
@@ -416,7 +416,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                             isSelected: _isItemActive(item),
                             onTap: () {
                               if (item.routePush != null) {
-                                context.push(item.routePush!);
+                                context.go(item.routePush!);
                               } else {
                                 _onBranchSelected(item.branchIndex);
                               }
@@ -507,7 +507,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                               onTap: () {
                                 Navigator.of(context).pop();
                                 if (item.routePush != null) {
-                                  context.push(item.routePush!);
+                                  context.go(item.routePush!);
                                 } else {
                                   _onBranchSelected(item.branchIndex);
                                 }
@@ -593,6 +593,7 @@ class _SidebarTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // ignore: use_null_aware_elements
               if (trailing != null) trailing!,
             ],
           ),

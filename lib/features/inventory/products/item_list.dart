@@ -357,11 +357,10 @@ class _ProductTableRow extends StatelessWidget {
             flex: 5,
             child: Row(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 12,
-                  backgroundImage: NetworkImage(
-                    'https://i.pravatar.cc/150?u=1',
-                  ),
+                  backgroundColor: Colors.grey.shade200,
+                  child: const Icon(Icons.person, size: 14, color: Colors.grey),
                 ),
                 const SizedBox(width: 8),
                 Text(currentUser?.name ?? "Unknown", style: _cellStyle()),

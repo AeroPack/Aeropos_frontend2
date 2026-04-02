@@ -24,22 +24,30 @@ class _InvoiceTemplateEditorAppState extends State<InvoiceTemplateEditorApp> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: _view == 'selection'
-          ? SelectionScreen(
-              key: const ValueKey('selection'),
-              onEdit: handleEdit,
-            )
-          : EditorScreen(
-              key: ValueKey('editor-$_selectedId'),
-              onBack: () {
-                setState(() {
-                  _view = 'selection';
-                });
-              },
-              templateId: _selectedId,
-            ),
+    return MaterialApp(
+      title: 'Invoice Template Editor',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
+        useMaterial3: true,
+      ),
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _view == 'selection'
+            ? SelectionScreen(
+                key: const ValueKey('selection'),
+                onEdit: handleEdit,
+              )
+            : EditorScreen(
+                key: ValueKey('editor-$_selectedId'),
+                onBack: () {
+                  setState(() {
+                    _view = 'selection';
+                  });
+                },
+                templateId: _selectedId,
+              ),
+      ),
     );
   }
 }

@@ -53,6 +53,7 @@ class _LabeledWrapper extends StatelessWidget {
                 ],
               ),
             ),
+            // ignore: use_null_aware_elements
             if (extraAction != null) extraAction!,
           ],
         ),
@@ -70,6 +71,7 @@ class PosTextInput extends StatelessWidget {
   final TextEditingController? controller;
   final bool isRequired;
   final bool isPassword;
+  final bool readOnly;
   final Widget? suffix;
   final int maxLines;
   final ValueChanged<String>? onChanged;
@@ -81,6 +83,7 @@ class PosTextInput extends StatelessWidget {
     this.placeholder,
     this.isRequired = false,
     this.isPassword = false,
+    this.readOnly = false,
     this.suffix,
     this.maxLines = 1,
     this.onChanged,
@@ -96,6 +99,7 @@ class PosTextInput extends StatelessWidget {
         controller: controller,
         maxLines: isPassword ? 1 : maxLines,
         onChanged: onChanged,
+        readOnly: readOnly,
         decoration: InputDecoration(
           hintText: placeholder,
           hintStyle: const TextStyle(color: PosColors.textLight, fontSize: 14),

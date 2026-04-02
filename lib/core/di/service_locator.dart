@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../utils/sku_generator.dart';
 import '../services/tenant_service.dart';
 import '../../config/app_config.dart';
 import '../services/sync_service.dart';
@@ -52,6 +53,7 @@ class ServiceLocator {
   late final InventoryService inventoryService;
   late final SyncService syncService;
   late final TenantService tenantService;
+  late final SkuGenerator skuGenerator;
 
   late final ProductViewModel productViewModel;
   late final CategoryViewModel categoryViewModel;
@@ -98,6 +100,8 @@ class ServiceLocator {
     // Initialize services
     tenantService = TenantService(secureStorage);
     await tenantService.initialize();
+
+    skuGenerator = SkuGenerator();
 
     inventoryService = InventoryService(productRepository);
     syncService = SyncService(

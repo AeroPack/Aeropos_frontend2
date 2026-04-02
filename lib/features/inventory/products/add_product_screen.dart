@@ -11,6 +11,9 @@ import 'package:go_router/go_router.dart';
 import 'package:ezo/core/layout/pos_design_system.dart';
 import 'package:ezo/core/widgets/pos_data_form.dart';
 import 'package:ezo/core/widgets/pos_toast.dart';
+import 'package:ezo/core/widgets/category_form_dialog.dart';
+import 'package:ezo/core/widgets/brand_form_dialog.dart';
+import 'package:ezo/core/widgets/unit_form_dialog.dart';
 import 'package:ezo/core/di/service_locator.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/viewModel/product_view_model.dart';
@@ -20,6 +23,9 @@ import 'package:ezo/core/models/brand.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+// Add these imports after existing ones
+// import 'package:ezo/core/utils/sku_generator.dart';
+// import 'package:connectivity_plus/connectivity_plus.dart';
 
 class AddItemScreen extends StatefulWidget {
   final ProductEntity? product;
@@ -486,12 +492,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
           children: [
             TextField(
               controller: urlController,
+              keyboardType: TextInputType.url,
               decoration: const InputDecoration(
                 hintText: 'https://example.com/image.jpg',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.link),
               ),
-              keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 8),
             Text(
@@ -521,9 +527,88 @@ class _AddItemScreenState extends State<AddItemScreen> {
     if (result != null && result.isNotEmpty) {
       setState(() {
         _imageUrl = result;
-        _selectedImageFile = null; // Clear file if URL is used
+        _selectedImageFile = null;
       });
     }
+  }
+
+  void _showAddCategoryDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => CategoryFormDialog(
+        onSubmit: (name, description) async {
+          final db = ServiceLocator.instance.database;
+          final uuid = DateTime.now().millisecondsSinceEpoch.toString();
+          await db
+              .into(db.categories)
+              .insert(
+                CategoriesCompanion.insert(
+                  uuid: uuid,
+                  name: name,
+                  tenantId: 1,
+                  description: drift.Value(
+                    description.isNotEmpty ? description : null,
+                  ),
+                ),
+              );
+          if (context.mounted) {
+            PosToast.showSuccess(context, "Category added successfully");
+          }
+        },
+      ),
+    );
+  }
+
+  void _showAddBrandDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => BrandFormDialog(
+        onSubmit: (name, description) async {
+          final db = ServiceLocator.instance.database;
+          final uuid = DateTime.now().millisecondsSinceEpoch.toString();
+          await db
+              .into(db.brands)
+              .insert(
+                BrandsCompanion.insert(
+                  uuid: uuid,
+                  name: name,
+                  tenantId: 1,
+                  description: drift.Value(
+                    description.isNotEmpty ? description : null,
+                  ),
+                ),
+              );
+          if (context.mounted) {
+            PosToast.showSuccess(context, "Brand added successfully");
+          }
+        },
+      ),
+    );
+  }
+
+  void _showAddUnitDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => UnitFormDialog(
+        onSubmit: (name, symbol) async {
+          final db = ServiceLocator.instance.database;
+          final uuid = DateTime.now().millisecondsSinceEpoch.toString();
+          await db
+              .into(db.units)
+              .insert(
+                UnitsCompanion.insert(
+                  uuid: uuid,
+                  name: name,
+                  symbol: symbol,
+                  tenantId: 1,
+                ),
+              );
+          if (context.mounted) {
+            PosToast.showSuccess(context, "Unit added successfully");
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -570,57 +655,132 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       isRequired: true,
                       controller: _skuController,
                       placeholder: "Scan or generate",
-                      suffix: Container(
-                        margin: const EdgeInsets.all(4),
-                        child: ElevatedButton(
-                          onPressed: _generateSku,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange.shade100,
-                            foregroundColor: Colors.orange.shade900,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: const Text(
-                            "Generate",
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
+                      readOnly: widget.product != null,
+                      suffix: widget.product != null
+                          ? Container(
+                              margin: const EdgeInsets.all(4),
+                              child: Tooltip(
+                                message: "SKU cannot be changed after creation",
+                                child: Icon(
+                                  Icons.lock_outline,
+                                  size: 18,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              margin: const EdgeInsets.all(4),
+                              child: ElevatedButton(
+                                onPressed: _generateSku,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade100,
+                                  foregroundColor: Colors.orange.shade900,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Generate",
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
                     ),
 
                     // CATEGORY DROPDOWN (Real Data)
-                    PosDropdown<int>(
-                      label: "Category",
-                      isRequired: true,
-                      value: _selectedCategoryId,
-                      hint: "Select Category",
-                      items: (categories)
-                          .map(
-                            (c) => DropdownMenuItem(
-                              value: c.id,
-                              child: Text(c.name),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: PosDropdown<int>(
+                            label: "Category",
+                            isRequired: true,
+                            value: _selectedCategoryId,
+                            hint: "Select Category",
+                            items: (categories)
+                                .map(
+                                  (c) => DropdownMenuItem(
+                                    value: c.id,
+                                    child: Text(c.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedCategoryId = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextButton.icon(
+                            onPressed: () => _showAddCategoryDialog(context),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text("Add"),
+                            style: TextButton.styleFrom(
+                              foregroundColor: PosColors.blue,
+                              backgroundColor: PosColors.blue.withValues(
+                                alpha: 0.1,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (val) =>
-                          setState(() => _selectedCategoryId = val),
+                          ),
+                        ),
+                      ],
                     ),
 
-                    PosDropdown<int>(
-                      label: "Brand",
-                      value: _selectedBrandId,
-                      hint: "Select Brand",
-                      items: brands
-                          .map(
-                            (e) => DropdownMenuItem(
-                              value: e.id,
-                              child: Text(e.name),
+                    // BRAND DROPDOWN (Real Data)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: PosDropdown<int>(
+                            label: "Brand",
+                            value: _selectedBrandId,
+                            hint: "Select Brand",
+                            items: brands
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e.id,
+                                    child: Text(e.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedBrandId = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextButton.icon(
+                            onPressed: () => _showAddBrandDialog(context),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text("Add"),
+                            style: TextButton.styleFrom(
+                              foregroundColor: PosColors.blue,
+                              backgroundColor: PosColors.blue.withValues(
+                                alpha: 0.1,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (val) =>
-                          setState(() => _selectedBrandId = val),
+                          ),
+                        ),
+                      ],
                     ),
+
                     PosTextInput(
                       label: "Sale Rate (\$)",
                       isRequired: true,
@@ -635,20 +795,51 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     ),
 
                     // UNIT DROPDOWN (Real Data)
-                    PosDropdown<int>(
-                      label: "Unit",
-                      value: _selectedUnitId,
-                      hint: "Select Unit",
-                      items: units
-                          .map(
-                            (u) => DropdownMenuItem(
-                              value: u.id,
-                              child: Text(u.name),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: PosDropdown<int>(
+                            label: "Unit",
+                            value: _selectedUnitId,
+                            hint: "Select Unit",
+                            items: units
+                                .map(
+                                  (u) => DropdownMenuItem(
+                                    value: u.id,
+                                    child: Text(u.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedUnitId = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextButton.icon(
+                            onPressed: () => _showAddUnitDialog(context),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text("Add"),
+                            style: TextButton.styleFrom(
+                              foregroundColor: PosColors.blue,
+                              backgroundColor: PosColors.blue.withValues(
+                                alpha: 0.1,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (val) => setState(() => _selectedUnitId = val),
+                          ),
+                        ),
+                      ],
                     ),
+
                     PosDropdown<String>(
                       label: "Gst Type",
                       value: _selectedGstType,

@@ -473,7 +473,7 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
         content: Text('${product.name} added'),
         backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 800),
+        duration: const Duration(milliseconds: 2000),
       ),
     );
   }

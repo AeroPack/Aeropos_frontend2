@@ -2213,6 +2213,7 @@ class _RetailLayoutState extends BasePosLayoutState<RetailLayout> {
         SnackBar(
           content: const Text('No held orders'),
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -2470,6 +2471,7 @@ class _RetailLayoutState extends BasePosLayoutState<RetailLayout> {
       const SnackBar(
         content: Text('Printing receipt...'),
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
       ),
     );
   }

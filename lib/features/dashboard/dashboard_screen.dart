@@ -37,13 +37,18 @@ class DashboardScreen extends ConsumerWidget {
                     SizedBox(height: isMobile ? 24 : 40),
                     _buildChartsRow(context, isMobile, isTablet, stats),
                     SizedBox(height: isMobile ? 24 : 40),
-                    _buildTransactionsTable(context, isMobile, recentSalesAsync),
+                    _buildTransactionsTable(
+                      context,
+                      isMobile,
+                      recentSalesAsync,
+                    ),
                     const SizedBox(height: 24),
                   ],
                 ),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error loading stats: $err')),
+              error: (err, stack) =>
+                  Center(child: Text('Error loading stats: $err')),
             );
           },
         ),
@@ -302,7 +307,12 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildChartsRow(BuildContext context, bool isMobile, bool isTablet, SaleStats stats) {
+  Widget _buildChartsRow(
+    BuildContext context,
+    bool isMobile,
+    bool isTablet,
+    SaleStats stats,
+  ) {
     if (isMobile) {
       return Column(
         children: [
@@ -316,7 +326,10 @@ class DashboardScreen extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(flex: isTablet ? 1 : 2, child: _buildRevenueChart(isMobile, stats)),
+        Expanded(
+          flex: isTablet ? 1 : 2,
+          child: _buildRevenueChart(isMobile, stats),
+        ),
         SizedBox(width: isTablet ? 16 : 24),
         Expanded(flex: 1, child: _buildPaymentMethods(isMobile, stats)),
       ],
@@ -329,10 +342,12 @@ class DashboardScreen extends ConsumerWidget {
         final double availableWidth = constraints.maxWidth;
         final double innerPadding = isMobile ? 20 : 32;
         // Chart height scales proportionally with the container width
-        final double chartHeight =
-            (availableWidth * 0.38).clamp(120.0, 220.0);
+        final double chartHeight = (availableWidth * 0.38).clamp(120.0, 220.0);
 
-        final double maxVal = stats.revenueTrend.fold(0.0, (m, p) => p.amount > m ? p.amount : m);
+        final double maxVal = stats.revenueTrend.fold(
+          0.0,
+          (m, p) => p.amount > m ? p.amount : m,
+        );
 
         return Container(
           padding: EdgeInsets.all(innerPadding),
@@ -368,12 +383,17 @@ class DashboardScreen extends ConsumerWidget {
                 height: chartHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: stats.revenueTrend.isEmpty 
-                    ? [const Center(child: Text('No data'))]
-                    : stats.revenueTrend.map((p) {
-                        final factor = maxVal > 0 ? p.amount / maxVal : 0.0;
-                        return _buildBar(p.label, factor, chartHeight, isMobile);
-                      }).toList(),
+                  children: stats.revenueTrend.isEmpty
+                      ? [const Center(child: Text('No data'))]
+                      : stats.revenueTrend.map((p) {
+                          final factor = maxVal > 0 ? p.amount / maxVal : 0.0;
+                          return _buildBar(
+                            p.label,
+                            factor,
+                            chartHeight,
+                            isMobile,
+                          );
+                        }).toList(),
                 ),
               ),
             ],
@@ -382,8 +402,6 @@ class DashboardScreen extends ConsumerWidget {
       },
     );
   }
-
-
 
   Widget _buildBar(
     String label,
@@ -427,13 +445,19 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildPaymentMethods(bool isMobile, SaleStats stats) {
-    final List<({Color color, double percentage})> segments = stats.paymentMethods.map((m) {
-      return (color: _getPaymentColor(m.method), percentage: m.percentage);
-    }).toList();
+    final List<({Color color, double percentage})> segments = stats
+        .paymentMethods
+        .map((m) {
+          return (color: _getPaymentColor(m.method), percentage: m.percentage);
+        })
+        .toList();
 
     // If no data, show an empty placeholder segment
     if (segments.isEmpty) {
-      segments.add((color: Colors.grey.withValues(alpha: 0.1), percentage: 1.0));
+      segments.add((
+        color: Colors.grey.withValues(alpha: 0.1),
+        percentage: 1.0,
+      ));
     }
 
     return Container(
@@ -464,9 +488,7 @@ class DashboardScreen extends ConsumerWidget {
                 children: [
                   CustomPaint(
                     size: Size(isMobile ? 140 : 160, isMobile ? 140 : 160),
-                    painter: _DonutChartPainter(
-                      segments: segments,
-                    ),
+                    painter: _DonutChartPainter(segments: segments),
                   ),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -496,17 +518,23 @@ class DashboardScreen extends ConsumerWidget {
           ),
           SizedBox(height: isMobile ? 20 : 24),
           if (stats.paymentMethods.isEmpty)
-            const Text('No transactions yet', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))
+            const Text(
+              'No transactions yet',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            )
           else
-            ...stats.paymentMethods.map((m) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: _buildPaymentLegend(
-                m.method.toUpperCase(),
-                '${(m.percentage * 100).toStringAsFixed(0)}%',
-                _getPaymentColor(m.method),
-                isMobile,
+            ...stats.paymentMethods.map(
+              (m) => Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: _buildPaymentLegend(
+                  m.method.toUpperCase(),
+                  '${(m.percentage * 100).toStringAsFixed(0)}%',
+                  _getPaymentColor(m.method),
+                  isMobile,
+                ),
               ),
-            )),
+            ),
         ],
       ),
     );
@@ -596,7 +624,10 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => context.go('/sales-history'),
                   borderRadius: BorderRadius.circular(4),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -709,9 +740,9 @@ class DashboardScreen extends ConsumerWidget {
                     return _buildTransactionRow(
                       inv.invoiceNumber,
                       cust?.name ?? 'Walk-in',
-                      DateFormat(isMobile ? 'MMM dd' : 'MMM dd, yyyy').format(
-                        inv.date,
-                      ),
+                      DateFormat(
+                        isMobile ? 'MMM dd' : 'MMM dd, yyyy',
+                      ).format(inv.date),
                       'Rs ${inv.total.toStringAsFixed(2)}',
                       'Completed',
                       true,
@@ -884,11 +915,7 @@ class _KPIStatCard extends StatelessWidget {
                   color: iconColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: isMobile ? 15 : 18,
-                ),
+                child: Icon(icon, color: iconColor, size: isMobile ? 15 : 18),
               ),
               Container(
                 padding: EdgeInsets.symmetric(
@@ -896,10 +923,11 @@ class _KPIStatCard extends StatelessWidget {
                   vertical: isMobile ? 2 : 3,
                 ),
                 decoration: BoxDecoration(
-                  color: (trendUp
-                          ? const Color(0xFF7ffc97)
-                          : const Color(0xFFf95630))
-                      .withValues(alpha: 0.15),
+                  color:
+                      (trendUp
+                              ? const Color(0xFF7ffc97)
+                              : const Color(0xFFf95630))
+                          .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(

@@ -12,7 +12,7 @@ class AppConfig {
       try {
         if (Platform.isAndroid) {
           // 10.0.2.2 is the special alias to your host loopback interface in Android emulator
-          return 'http://10.0.2.2:5004/';
+          return 'http://localhost:5004/';
         }
       } on Object catch (_) {}
 

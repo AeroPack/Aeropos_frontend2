@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../pos_layout_selector.dart';
+
 
 /// A unified header component for all POS layouts.
 /// Provides a consistent look (title, search area, clock).
@@ -16,7 +16,7 @@ class PosHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onReset;
   final VoidCallback? onOrders;
-  final bool showLayoutSelector;
+
 
   const PosHeader({
     super.key,
@@ -30,7 +30,7 @@ class PosHeader extends StatelessWidget {
     this.onBack,
     this.onReset,
     this.onOrders,
-    this.showLayoutSelector = false,
+
   });
 
   @override
@@ -98,10 +98,7 @@ class PosHeader extends StatelessWidget {
               onPressed: onReset,
               tooltip: 'Reset',
             ),
-          if (showLayoutSelector) ...[
-            const PosLayoutSelector(),
-            const SizedBox(width: 8),
-          ],
+
           if (actions != null) ...[
             ...actions!,
             const SizedBox(width: 12),

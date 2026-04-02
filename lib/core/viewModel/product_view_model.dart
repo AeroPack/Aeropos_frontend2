@@ -4,11 +4,11 @@ import '../services/sync_service.dart';
 import 'package:uuid/uuid.dart';
 import '../repositories/category_repository.dart';
 import '../repositories/unit_repository.dart';
-import '../repositories/brand_repository.dart'; // Added
+import '../repositories/brand_repository.dart';
 import '../models/category.dart';
 import '../models/unit.dart';
-import '../models/brand.dart'; // Added
-import '../services/device_id_service.dart';
+import '../models/brand.dart';
+import '../di/service_locator.dart';
 
 class ProductViewModel {
   final AppDatabase _database;
@@ -131,11 +131,6 @@ class ProductViewModel {
   }
 
   Future<String> generateNextSku() async {
-    // Get device ID
-    final deviceIdService = DeviceIdService(_database);
-    final deviceId = await deviceIdService.getDeviceId();
-
-    // Generate SKU with device ID
-    return await _database.getNextSku(deviceId);
+    return await ServiceLocator.instance.skuGenerator.generateNextSku();
   }
 }

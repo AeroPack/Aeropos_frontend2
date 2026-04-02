@@ -3,12 +3,14 @@ import 'package:ezo/features/auth/presentation/providers/auth_controller.dart';
 import 'package:ezo/features/auth/presentation/screens/login_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/signup_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/email_verification_pending_screen.dart';
+import 'package:ezo/features/auth/presentation/screens/verify_email_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/reset_password_screen.dart';
 import 'package:ezo/features/auth/presentation/screens/company_picker_screen.dart';
 import 'package:ezo/features/inventory/products/item_list.dart';
 import 'package:ezo/features/inventory/products/add_product_screen.dart';
 import 'package:ezo/features/inventory/products/product_detail_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +46,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/dashboard',
     refreshListenable: GoRouterRefreshStream(authController.stream),
     redirect: (context, state) {
+      // 1. URL Sanitizer: Fixes occurrences of "//" or absolute placeholders.
+      if (kIsWeb) {
+        // Resolve absolute mismatch if backend used a placeholder hostname
+        if (state.uri.isAbsolute && state.uri.host == 'verify-email') {
+          final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+          return '/verify-email$query';
+        }
+
+        // Clean double slashes recursively in the full URI string if path was misparsed
+        if (state.uri.toString().contains('//') && !state.uri.toString().contains('://')) {
+           final cleanPath = state.uri.path.replaceAll(RegExp(r'/+'), '/');
+           final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+           return '$cleanPath$query';
+        }
+
+        if (state.uri.path.contains('//')) {
+          final cleanPath = state.uri.path.replaceAll(RegExp(r'/+'), '/');
+          final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+          return '$cleanPath$query';
+        }
+      }
+
       final authState = ref.read(authControllerProvider);
       final isLoggedIn = authState.status == AuthStatus.authenticated;
       final isCompanySelection =
@@ -53,6 +77,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state.uri.path == '/signup' ||
           state.uri.path == '/forgot-password' ||
           state.uri.path == '/reset-password' ||
+          state.uri.path == '/verify-email' ||
           state.uri.path == '/select-company';
 
       // Redirect to company selection screen
@@ -70,6 +95,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         final isPendingScreen = state.uri.path == '/verify-pending';
 
         if (!isVerified) {
+          // Allow internal verification route even if not verified yet
+          if (state.uri.path == '/verify-email') return null;
+          
           if (!isPendingScreen) return '/verify-pending';
           return null;
         }
@@ -100,6 +128,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final token = state.uri.queryParameters['token'];
           return ResetPasswordScreen(token: token);
+        },
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'];
+          return VerifyEmailScreen(token: token);
         },
       ),
       GoRoute(

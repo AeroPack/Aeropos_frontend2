@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Available POS layout types.
-/// To add a new layout:
-/// 1. Add a new enum value here
-/// 2. Create a new layout widget extending BasePosLayout
-/// 3. Add the case to the switch in pos_screen.dart
 enum PosLayoutType {
   compact,
   restaurant,
@@ -72,9 +67,12 @@ class PosLayoutNotifier extends StateNotifier<PosLayoutType> {
     final saved = prefs.getString(_prefKey);
     if (saved != null) {
       try {
-        state = PosLayoutType.values.firstWhere((e) => e.name == saved);
+        final loadedLayout = PosLayoutType.values.firstWhere(
+          (e) => e.name == saved,
+        );
+        state = loadedLayout;
       } catch (_) {
-        // Invalid value — keep default
+        // Keep default on invalid value
       }
     }
   }
@@ -86,6 +84,7 @@ class PosLayoutNotifier extends StateNotifier<PosLayoutType> {
   }
 }
 
-final posLayoutProvider =  StateNotifierProvider<PosLayoutNotifier, PosLayoutType>(
-  (ref) => PosLayoutNotifier(),
-);
+final posLayoutProvider =
+    StateNotifierProvider<PosLayoutNotifier, PosLayoutType>(
+      (ref) => PosLayoutNotifier(),
+    );

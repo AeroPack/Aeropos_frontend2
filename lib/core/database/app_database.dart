@@ -14,6 +14,7 @@ import 'tables/invoice_items_table.dart';
 import 'tables/sync_metadata.dart';
 import 'tables/brands_table.dart';
 import 'tables/sku_counter_table.dart';
+import 'tables/reserved_skus_table.dart';
 
 part 'app_database.g.dart';
 
@@ -32,13 +33,14 @@ part 'app_database.g.dart';
     Brands,
     SyncMetadata,
     SkuCounters,
+    ReservedSkus,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? impl.connect());
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration {
@@ -237,6 +239,10 @@ class AppDatabase extends _$AppDatabase {
             'payment_method',
             invoices.paymentMethod as GeneratedColumn<Object>,
           );
+        }
+        if (from < 30) {
+          // Create Reserved SKUs table
+          await m.createTable(reservedSkus);
         }
       },
       beforeOpen: (details) async {
@@ -635,5 +641,48 @@ class AppDatabase extends _$AppDatabase {
       // Format SKU with device ID and leading zeros (e.g., SKU-DEV1-0001)
       return '${counter.prefix}-$deviceId-${nextNumber.toString().padLeft(4, '0')}';
     });
+  }
+
+  // Reserved SKU methods
+  Future<int?> getMaxSkuSequence(int tenantId) async {
+    final query = selectOnly(reservedSkus)
+      ..addColumns([reservedSkus.sku])
+      ..where(reservedSkus.tenantId.equals(tenantId));
+    final skus = await query.map((row) => row.read(reservedSkus.sku)).get();
+
+    if (skus.isEmpty) return null;
+
+    int maxSeq = 0;
+    for (final sku in skus) {
+      if (sku == null) continue;
+      final parts = sku.split('-');
+      if (parts.length >= 3) {
+        final seq = int.tryParse(parts.last) ?? 0;
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    return maxSeq;
+  }
+
+  Future<void> reserveSku(String sku, int tenantId) async {
+    await into(reservedSkus).insert(
+      ReservedSkusCompanion.insert(
+        sku: sku,
+        tenantId: tenantId,
+      ),
+    );
+  }
+
+  Future<bool> checkSkuExists(String sku, int tenantId) async {
+    final result = await (select(reservedSkus)
+          ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
+        .getSingleOrNull();
+    if (result != null) return true;
+
+    // Check products table too
+    final product = await (select(products)
+          ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
+        .getSingleOrNull();
+    return product != null;
   }
 }

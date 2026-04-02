@@ -9348,6 +9348,404 @@ class SkuCountersCompanion extends UpdateCompanion<SkuCounterEntity> {
   }
 }
 
+class $ReservedSkusTable extends ReservedSkus
+    with TableInfo<$ReservedSkusTable, ReservedSkusData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ReservedSkusTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _skuMeta = const VerificationMeta('sku');
+  @override
+  late final GeneratedColumn<String> sku = GeneratedColumn<String>(
+    'sku',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _tenantIdMeta = const VerificationMeta(
+    'tenantId',
+  );
+  @override
+  late final GeneratedColumn<int> tenantId = GeneratedColumn<int>(
+    'tenant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isUsedMeta = const VerificationMeta('isUsed');
+  @override
+  late final GeneratedColumn<bool> isUsed = GeneratedColumn<bool>(
+    'is_used',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_used" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _reservedAtMeta = const VerificationMeta(
+    'reservedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> reservedAt = GeneratedColumn<DateTime>(
+    'reserved_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _usedAtMeta = const VerificationMeta('usedAt');
+  @override
+  late final GeneratedColumn<DateTime> usedAt = GeneratedColumn<DateTime>(
+    'used_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sku,
+    tenantId,
+    isUsed,
+    reservedAt,
+    usedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reserved_skus';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ReservedSkusData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('sku')) {
+      context.handle(
+        _skuMeta,
+        sku.isAcceptableOrUnknown(data['sku']!, _skuMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_skuMeta);
+    }
+    if (data.containsKey('tenant_id')) {
+      context.handle(
+        _tenantIdMeta,
+        tenantId.isAcceptableOrUnknown(data['tenant_id']!, _tenantIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tenantIdMeta);
+    }
+    if (data.containsKey('is_used')) {
+      context.handle(
+        _isUsedMeta,
+        isUsed.isAcceptableOrUnknown(data['is_used']!, _isUsedMeta),
+      );
+    }
+    if (data.containsKey('reserved_at')) {
+      context.handle(
+        _reservedAtMeta,
+        reservedAt.isAcceptableOrUnknown(data['reserved_at']!, _reservedAtMeta),
+      );
+    }
+    if (data.containsKey('used_at')) {
+      context.handle(
+        _usedAtMeta,
+        usedAt.isAcceptableOrUnknown(data['used_at']!, _usedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ReservedSkusData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ReservedSkusData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      sku: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sku'],
+      )!,
+      tenantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tenant_id'],
+      )!,
+      isUsed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_used'],
+      )!,
+      reservedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}reserved_at'],
+      )!,
+      usedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}used_at'],
+      ),
+    );
+  }
+
+  @override
+  $ReservedSkusTable createAlias(String alias) {
+    return $ReservedSkusTable(attachedDatabase, alias);
+  }
+}
+
+class ReservedSkusData extends DataClass
+    implements Insertable<ReservedSkusData> {
+  final int id;
+  final String sku;
+  final int tenantId;
+  final bool isUsed;
+  final DateTime reservedAt;
+  final DateTime? usedAt;
+  const ReservedSkusData({
+    required this.id,
+    required this.sku,
+    required this.tenantId,
+    required this.isUsed,
+    required this.reservedAt,
+    this.usedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['sku'] = Variable<String>(sku);
+    map['tenant_id'] = Variable<int>(tenantId);
+    map['is_used'] = Variable<bool>(isUsed);
+    map['reserved_at'] = Variable<DateTime>(reservedAt);
+    if (!nullToAbsent || usedAt != null) {
+      map['used_at'] = Variable<DateTime>(usedAt);
+    }
+    return map;
+  }
+
+  ReservedSkusCompanion toCompanion(bool nullToAbsent) {
+    return ReservedSkusCompanion(
+      id: Value(id),
+      sku: Value(sku),
+      tenantId: Value(tenantId),
+      isUsed: Value(isUsed),
+      reservedAt: Value(reservedAt),
+      usedAt: usedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(usedAt),
+    );
+  }
+
+  factory ReservedSkusData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ReservedSkusData(
+      id: serializer.fromJson<int>(json['id']),
+      sku: serializer.fromJson<String>(json['sku']),
+      tenantId: serializer.fromJson<int>(json['tenantId']),
+      isUsed: serializer.fromJson<bool>(json['isUsed']),
+      reservedAt: serializer.fromJson<DateTime>(json['reservedAt']),
+      usedAt: serializer.fromJson<DateTime?>(json['usedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sku': serializer.toJson<String>(sku),
+      'tenantId': serializer.toJson<int>(tenantId),
+      'isUsed': serializer.toJson<bool>(isUsed),
+      'reservedAt': serializer.toJson<DateTime>(reservedAt),
+      'usedAt': serializer.toJson<DateTime?>(usedAt),
+    };
+  }
+
+  ReservedSkusData copyWith({
+    int? id,
+    String? sku,
+    int? tenantId,
+    bool? isUsed,
+    DateTime? reservedAt,
+    Value<DateTime?> usedAt = const Value.absent(),
+  }) => ReservedSkusData(
+    id: id ?? this.id,
+    sku: sku ?? this.sku,
+    tenantId: tenantId ?? this.tenantId,
+    isUsed: isUsed ?? this.isUsed,
+    reservedAt: reservedAt ?? this.reservedAt,
+    usedAt: usedAt.present ? usedAt.value : this.usedAt,
+  );
+  ReservedSkusData copyWithCompanion(ReservedSkusCompanion data) {
+    return ReservedSkusData(
+      id: data.id.present ? data.id.value : this.id,
+      sku: data.sku.present ? data.sku.value : this.sku,
+      tenantId: data.tenantId.present ? data.tenantId.value : this.tenantId,
+      isUsed: data.isUsed.present ? data.isUsed.value : this.isUsed,
+      reservedAt: data.reservedAt.present
+          ? data.reservedAt.value
+          : this.reservedAt,
+      usedAt: data.usedAt.present ? data.usedAt.value : this.usedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReservedSkusData(')
+          ..write('id: $id, ')
+          ..write('sku: $sku, ')
+          ..write('tenantId: $tenantId, ')
+          ..write('isUsed: $isUsed, ')
+          ..write('reservedAt: $reservedAt, ')
+          ..write('usedAt: $usedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, sku, tenantId, isUsed, reservedAt, usedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ReservedSkusData &&
+          other.id == this.id &&
+          other.sku == this.sku &&
+          other.tenantId == this.tenantId &&
+          other.isUsed == this.isUsed &&
+          other.reservedAt == this.reservedAt &&
+          other.usedAt == this.usedAt);
+}
+
+class ReservedSkusCompanion extends UpdateCompanion<ReservedSkusData> {
+  final Value<int> id;
+  final Value<String> sku;
+  final Value<int> tenantId;
+  final Value<bool> isUsed;
+  final Value<DateTime> reservedAt;
+  final Value<DateTime?> usedAt;
+  const ReservedSkusCompanion({
+    this.id = const Value.absent(),
+    this.sku = const Value.absent(),
+    this.tenantId = const Value.absent(),
+    this.isUsed = const Value.absent(),
+    this.reservedAt = const Value.absent(),
+    this.usedAt = const Value.absent(),
+  });
+  ReservedSkusCompanion.insert({
+    this.id = const Value.absent(),
+    required String sku,
+    required int tenantId,
+    this.isUsed = const Value.absent(),
+    this.reservedAt = const Value.absent(),
+    this.usedAt = const Value.absent(),
+  }) : sku = Value(sku),
+       tenantId = Value(tenantId);
+  static Insertable<ReservedSkusData> custom({
+    Expression<int>? id,
+    Expression<String>? sku,
+    Expression<int>? tenantId,
+    Expression<bool>? isUsed,
+    Expression<DateTime>? reservedAt,
+    Expression<DateTime>? usedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sku != null) 'sku': sku,
+      if (tenantId != null) 'tenant_id': tenantId,
+      if (isUsed != null) 'is_used': isUsed,
+      if (reservedAt != null) 'reserved_at': reservedAt,
+      if (usedAt != null) 'used_at': usedAt,
+    });
+  }
+
+  ReservedSkusCompanion copyWith({
+    Value<int>? id,
+    Value<String>? sku,
+    Value<int>? tenantId,
+    Value<bool>? isUsed,
+    Value<DateTime>? reservedAt,
+    Value<DateTime?>? usedAt,
+  }) {
+    return ReservedSkusCompanion(
+      id: id ?? this.id,
+      sku: sku ?? this.sku,
+      tenantId: tenantId ?? this.tenantId,
+      isUsed: isUsed ?? this.isUsed,
+      reservedAt: reservedAt ?? this.reservedAt,
+      usedAt: usedAt ?? this.usedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sku.present) {
+      map['sku'] = Variable<String>(sku.value);
+    }
+    if (tenantId.present) {
+      map['tenant_id'] = Variable<int>(tenantId.value);
+    }
+    if (isUsed.present) {
+      map['is_used'] = Variable<bool>(isUsed.value);
+    }
+    if (reservedAt.present) {
+      map['reserved_at'] = Variable<DateTime>(reservedAt.value);
+    }
+    if (usedAt.present) {
+      map['used_at'] = Variable<DateTime>(usedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReservedSkusCompanion(')
+          ..write('id: $id, ')
+          ..write('sku: $sku, ')
+          ..write('tenantId: $tenantId, ')
+          ..write('isUsed: $isUsed, ')
+          ..write('reservedAt: $reservedAt, ')
+          ..write('usedAt: $usedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -9366,6 +9764,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BrandsTable brands = $BrandsTable(this);
   late final $SyncMetadataTable syncMetadata = $SyncMetadataTable(this);
   late final $SkuCountersTable skuCounters = $SkuCountersTable(this);
+  late final $ReservedSkusTable reservedSkus = $ReservedSkusTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -9384,6 +9783,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     brands,
     syncMetadata,
     skuCounters,
+    reservedSkus,
   ];
 }
 
@@ -13821,6 +14221,221 @@ typedef $$SkuCountersTableProcessedTableManager =
       SkuCounterEntity,
       PrefetchHooks Function()
     >;
+typedef $$ReservedSkusTableCreateCompanionBuilder =
+    ReservedSkusCompanion Function({
+      Value<int> id,
+      required String sku,
+      required int tenantId,
+      Value<bool> isUsed,
+      Value<DateTime> reservedAt,
+      Value<DateTime?> usedAt,
+    });
+typedef $$ReservedSkusTableUpdateCompanionBuilder =
+    ReservedSkusCompanion Function({
+      Value<int> id,
+      Value<String> sku,
+      Value<int> tenantId,
+      Value<bool> isUsed,
+      Value<DateTime> reservedAt,
+      Value<DateTime?> usedAt,
+    });
+
+class $$ReservedSkusTableFilterComposer
+    extends Composer<_$AppDatabase, $ReservedSkusTable> {
+  $$ReservedSkusTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sku => $composableBuilder(
+    column: $table.sku,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tenantId => $composableBuilder(
+    column: $table.tenantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isUsed => $composableBuilder(
+    column: $table.isUsed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get reservedAt => $composableBuilder(
+    column: $table.reservedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get usedAt => $composableBuilder(
+    column: $table.usedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ReservedSkusTableOrderingComposer
+    extends Composer<_$AppDatabase, $ReservedSkusTable> {
+  $$ReservedSkusTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sku => $composableBuilder(
+    column: $table.sku,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get tenantId => $composableBuilder(
+    column: $table.tenantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isUsed => $composableBuilder(
+    column: $table.isUsed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get reservedAt => $composableBuilder(
+    column: $table.reservedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get usedAt => $composableBuilder(
+    column: $table.usedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ReservedSkusTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ReservedSkusTable> {
+  $$ReservedSkusTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sku =>
+      $composableBuilder(column: $table.sku, builder: (column) => column);
+
+  GeneratedColumn<int> get tenantId =>
+      $composableBuilder(column: $table.tenantId, builder: (column) => column);
+
+  GeneratedColumn<bool> get isUsed =>
+      $composableBuilder(column: $table.isUsed, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get reservedAt => $composableBuilder(
+    column: $table.reservedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get usedAt =>
+      $composableBuilder(column: $table.usedAt, builder: (column) => column);
+}
+
+class $$ReservedSkusTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ReservedSkusTable,
+          ReservedSkusData,
+          $$ReservedSkusTableFilterComposer,
+          $$ReservedSkusTableOrderingComposer,
+          $$ReservedSkusTableAnnotationComposer,
+          $$ReservedSkusTableCreateCompanionBuilder,
+          $$ReservedSkusTableUpdateCompanionBuilder,
+          (
+            ReservedSkusData,
+            BaseReferences<_$AppDatabase, $ReservedSkusTable, ReservedSkusData>,
+          ),
+          ReservedSkusData,
+          PrefetchHooks Function()
+        > {
+  $$ReservedSkusTableTableManager(_$AppDatabase db, $ReservedSkusTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ReservedSkusTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ReservedSkusTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ReservedSkusTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> sku = const Value.absent(),
+                Value<int> tenantId = const Value.absent(),
+                Value<bool> isUsed = const Value.absent(),
+                Value<DateTime> reservedAt = const Value.absent(),
+                Value<DateTime?> usedAt = const Value.absent(),
+              }) => ReservedSkusCompanion(
+                id: id,
+                sku: sku,
+                tenantId: tenantId,
+                isUsed: isUsed,
+                reservedAt: reservedAt,
+                usedAt: usedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String sku,
+                required int tenantId,
+                Value<bool> isUsed = const Value.absent(),
+                Value<DateTime> reservedAt = const Value.absent(),
+                Value<DateTime?> usedAt = const Value.absent(),
+              }) => ReservedSkusCompanion.insert(
+                id: id,
+                sku: sku,
+                tenantId: tenantId,
+                isUsed: isUsed,
+                reservedAt: reservedAt,
+                usedAt: usedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ReservedSkusTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ReservedSkusTable,
+      ReservedSkusData,
+      $$ReservedSkusTableFilterComposer,
+      $$ReservedSkusTableOrderingComposer,
+      $$ReservedSkusTableAnnotationComposer,
+      $$ReservedSkusTableCreateCompanionBuilder,
+      $$ReservedSkusTableUpdateCompanionBuilder,
+      (
+        ReservedSkusData,
+        BaseReferences<_$AppDatabase, $ReservedSkusTable, ReservedSkusData>,
+      ),
+      ReservedSkusData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -13851,4 +14466,6 @@ class $AppDatabaseManager {
       $$SyncMetadataTableTableManager(_db, _db.syncMetadata);
   $$SkuCountersTableTableManager get skuCounters =>
       $$SkuCountersTableTableManager(_db, _db.skuCounters);
+  $$ReservedSkusTableTableManager get reservedSkus =>
+      $$ReservedSkusTableTableManager(_db, _db.reservedSkus);
 }

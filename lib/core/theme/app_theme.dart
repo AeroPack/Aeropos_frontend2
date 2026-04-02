@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Master Palette
-  static const Color primary = Color(0xFFDC2626); // Warm Red
-  static const Color secondary = Color(0xFFF87171); // Soft Red
+  static const Color primary = Color(0xFFFFD700); // Yellow/Gold
+  static const Color secondary = Color(0xFFFFE44D); // Soft Yellow
   static const Color accent = Color(0xFFCA8A04); // Appetizing Gold/Amber
-  static const Color background = Color(0xFFFEF2F2); // Very Light Pink/White
+  static const Color background = Color(0xFFFFFBEB); // Very Light Yellow
   static const Color surface = Colors.white;
   static const Color text = Color(0xFF450A0A); // Dark Deep Red
-  
+
   // States
   static const Color success = Color(0xFF10B981);
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFEF4444);
   static const Color info = Color(0xFF3B82F6);
-  
+
   // Grey Scale
   static const Color grey50 = Color(0xFFF9FAFB);
   static const Color grey100 = Color(0xFFF3F4F6);
@@ -43,7 +43,7 @@ class AppShadows {
       offset: const Offset(0, 4),
     ),
   ];
-  
+
   static final List<BoxShadow> lg = [
     BoxShadow(
       color: Colors.black.withValues(alpha: 0.1),
