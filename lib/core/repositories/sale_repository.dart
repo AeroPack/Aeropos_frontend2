@@ -1,11 +1,9 @@
 import 'package:drift/drift.dart';
-import 'package:dio/dio.dart';
+import 'package:uuid/uuid.dart';
 import '../models/sale.dart';
-import '../models/enums/sync_status.dart';
 import '../database/app_database.dart';
 import '../di/service_locator.dart';
-import '../exceptions/sale_validation_exception.dart';
-import 'package:uuid/uuid.dart';
+import 'sync_repository.dart';
 
 class SaleRepository {
   final AppDatabase _db;
@@ -28,7 +26,6 @@ class SaleRepository {
           total: entity.total,
           paymentMethod: entity.paymentMethod,
           createdAt: entity.date,
-          syncStatus: SyncStatus.fromValue(entity.syncStatus),
           isDeleted: entity.isDeleted,
           items: items,
         ),
@@ -52,7 +49,6 @@ class SaleRepository {
               total: entity.total,
               paymentMethod: entity.paymentMethod,
               createdAt: entity.date,
-              syncStatus: SyncStatus.fromValue(entity.syncStatus),
               isDeleted: entity.isDeleted,
               items: [],
             ),
@@ -62,7 +58,8 @@ class SaleRepository {
   }
 
   Stream<List<TypedResult>> watchSalesWithCustomer() {
-    return _db.watchInvoicesWithCustomer();
+    final tenantId = ServiceLocator.instance.tenantService.tenantId;
+    return _db.watchInvoicesWithCustomer(tenantId: tenantId);
   }
 
   Future<Sale?> getSaleById(int id) async {
@@ -75,16 +72,11 @@ class SaleRepository {
   }
 
   Future<int> createSale(Sale sale) async {
-    // Validate products before creating sale
-    final validationErrors = await validateSaleProducts(sale);
-    if (validationErrors.isNotEmpty) {
-      throw SaleValidationException(
-        'Cannot create sale with invalid products',
-        invalidProducts: validationErrors,
-      );
-    }
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final tenantId = ServiceLocator.instance.tenantService.tenantId;
 
-    final invoiceId = await _db.transaction(() async {
+    return await _db.transaction(() async {
+      // 1. Insert Invoice header
       final invoiceId = await _db.insertInvoice(
         InvoicesCompanion.insert(
           uuid: sale.uuid,
@@ -96,13 +88,13 @@ class SaleRepository {
           total: sale.total,
           paymentMethod: Value(sale.paymentMethod),
           customerId: Value(sale.customerId),
-          syncStatus: Value(SyncStatus.pending.value),
           isDeleted: Value(false),
           updatedAt: Value(DateTime.now()),
-          tenantId: ServiceLocator.instance.tenantService.tenantId,
+          tenantId: tenantId,
         ),
       );
 
+      // 2. Insert Invoice items
       final itemCompanions = sale.items
           .map(
             (item) => InvoiceItemsCompanion.insert(
@@ -113,42 +105,35 @@ class SaleRepository {
               discount: Value(item.discount),
               totalPrice: item.total,
               uuid: item.uuid.isEmpty ? const Uuid().v4() : item.uuid,
-              syncStatus: Value(SyncStatus.pending.value),
               isDeleted: Value(false),
               updatedAt: Value(DateTime.now()),
-              tenantId: ServiceLocator.instance.tenantService.tenantId,
+              tenantId: tenantId,
             ),
           )
           .toList();
 
       await _db.insertInvoiceItems(itemCompanions);
-      return invoiceId;
-    });
 
-    // Trigger sync and handle errors
-    try {
-      ServiceLocator.instance.syncService.sync();
-    } catch (e) {
-      if (e is DioException && e.response?.statusCode == 400) {
-        final errorData = e.response?.data;
-        if (errorData is Map && errorData.containsKey('invalidProducts')) {
-          final invalidProducts = (errorData['invalidProducts'] as List)
-              .map((p) => p.toString())
-              .toList();
-          throw SaleValidationException(
-            'Server rejected invoice due to invalid products',
-            invalidProducts: invalidProducts,
-          );
-        }
-        throw SaleValidationException(
-          'Server validation failed: ${errorData.toString()}',
+      // 3. Log stock deltas (DELTA ONLY, not absolute)
+      for (final item in sale.items) {
+        await syncRepo.logStockDelta(
+          productId: item.productId.toString(),
+          delta: -item.quantity.toDouble(),
+          reason: 'sale',
+          refId: invoiceId.toString(),
         );
       }
-      // Re-throw other errors
-      rethrow;
-    }
 
-    return invoiceId;
+      // 4. Log sale operation to sync_outbox (LAST step)
+      await syncRepo.logOperation(
+        entity: 'invoices',
+        entityId: sale.uuid,
+        opType: SyncOpType.insert,
+        data: sale.toJson(),
+      );
+
+      return invoiceId;
+    });
   }
 
   Future<List<SaleItem>> getSaleItems(int saleId) async {
@@ -158,7 +143,7 @@ class SaleRepository {
       final product = row.readTable(_db.products);
       return SaleItem(
         id: item.id,
-        uuid: "",
+        uuid: item.uuid,
         saleId: item.invoiceId,
         productId: item.productId,
         product: product,
@@ -166,30 +151,61 @@ class SaleRepository {
         unitPrice: item.unitPrice,
         discount: item.discount,
         total: item.totalPrice,
-        syncStatus: SyncStatus.fromValue(item.syncStatus),
         isDeleted: item.isDeleted,
       );
     }).toList();
   }
 
-  /// Validate that all products in the sale exist and are active
   Future<List<String>> validateSaleProducts(Sale sale) async {
-    final errors = <String>[];
-
+    final validationErrors = <String>[];
     for (final item in sale.items) {
       final product = await (_db.select(
         _db.products,
       )..where((t) => t.id.equals(item.productId))).getSingleOrNull();
-
       if (product == null) {
-        errors.add('Product ID ${item.productId} not found');
-      } else if (product.isDeleted) {
-        errors.add('${product.name} (deleted)');
-      } else if (!product.isActive) {
-        errors.add('${product.name} (inactive)');
+        validationErrors.add('Product ID ${item.productId} not found');
+      } else if (product.stockQuantity < item.quantity) {
+        validationErrors.add('Insufficient stock for ${product.name}');
       }
     }
+    return validationErrors;
+  }
 
-    return errors;
+  Future<bool> deleteSale(int id) async {
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final entity = await (_db.select(
+      _db.invoices,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (entity == null) return false;
+
+    return await _db.transaction(() async {
+      // Soft delete invoice
+      await (_db.update(_db.invoices)..where((t) => t.id.equals(id))).write(
+        InvoicesCompanion(
+          isDeleted: const Value(true),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+
+      // Soft delete items
+      await (_db.update(
+        _db.invoiceItems,
+      )..where((t) => t.invoiceId.equals(id))).write(
+        InvoiceItemsCompanion(
+          isDeleted: const Value(true),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+
+      // Log delete to sync_outbox
+      await syncRepo.logOperation(
+        entity: 'invoices',
+        entityId: entity.uuid,
+        opType: SyncOpType.delete,
+        data: null,
+      );
+
+      return true;
+    });
   }
 }

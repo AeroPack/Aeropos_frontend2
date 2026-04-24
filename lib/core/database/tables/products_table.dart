@@ -9,6 +9,9 @@ class Products extends Table {
   // Simplified for Product Master only - removing foreign keys to missing tables
   IntColumn get categoryId => integer().nullable()();
   IntColumn get unitId => integer().nullable()();
+  IntColumn get baseUnitId => integer().nullable()();
+  BoolColumn get allowLooseSale =>
+      boolean().withDefault(const Constant(true))();
   IntColumn get brandId => integer().nullable()();
   TextColumn get type => text().nullable()();
   TextColumn get packSize => text().nullable()();

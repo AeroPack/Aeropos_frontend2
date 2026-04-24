@@ -4,6 +4,7 @@ import 'connection/connection.dart' as impl;
 import 'tables/products_table.dart';
 import 'tables/categories_table.dart';
 import 'tables/units_table.dart';
+import 'tables/product_units_table.dart';
 import 'tables/tenants_table.dart';
 import 'tables/customers_table.dart';
 import 'tables/suppliers_table.dart';
@@ -15,6 +16,21 @@ import 'tables/sync_metadata.dart';
 import 'tables/brands_table.dart';
 import 'tables/sku_counter_table.dart';
 import 'tables/reserved_skus_table.dart';
+import 'tables/customer_transactions_table.dart';
+import 'tables/supplier_transactions_table.dart';
+import 'tables/purchase_receipts_table.dart';
+import 'tables/purchase_receipt_items_table.dart';
+import 'tables/sync_outbox.dart';
+import 'tables/sync_errors.dart';
+import 'tables/sync_state.dart';
+import 'tables/stock_outbox.dart';
+import 'tables/returns_table.dart';
+import 'tables/return_items_table.dart';
+import 'tables/wallet_transactions_table.dart';
+import 'tables/inventory_movements_table.dart';
+import 'tables/invoice_audit_logs_table.dart';
+import 'dao/customer_transaction_dao.dart';
+import 'dao/supplier_transaction_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -23,6 +39,7 @@ part 'app_database.g.dart';
     Products,
     Categories,
     Units,
+    ProductUnits,
     Tenants,
     Customers,
     Suppliers,
@@ -34,21 +51,60 @@ part 'app_database.g.dart';
     SyncMetadata,
     SkuCounters,
     ReservedSkus,
+    CustomerTransactions,
+    SupplierTransactions,
+    PurchaseReceipts,
+    PurchaseReceiptItems,
+    SyncOutbox,
+    SyncErrors,
+    SyncState,
+    StockOutbox,
+    Returns,
+    ReturnItems,
+    WalletTransactions,
+    InventoryMovements,
+    InvoiceAuditLogs,
   ],
+  daos: [CustomerTransactionDao, SupplierTransactionDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? impl.connect());
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 39;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (m) async {
+        print('DRIFT: Running onCreate - creating all tables');
         await m.createAll();
+
+        await _seedDefaultUnits();
+
+        print('DRIFT: onCreate complete');
       },
+
       onUpgrade: (m, from, to) async {
+        if (from < 36) {
+          await m.createTable(syncOutbox);
+          await m.createTable(syncState);
+          await m.createTable(stockOutbox);
+        }
+
+        if (from < 35) {
+          await customStatement(
+            'ALTER TABLE products ADD COLUMN base_unit_id INTEGER',
+          );
+          await customStatement(
+            'ALTER TABLE products ADD COLUMN allow_loose_sale INTEGER NOT NULL DEFAULT 1',
+          );
+          // Create product_units table
+          await m.createTable(productUnits);
+
+          await _seedDefaultUnits();
+        }
+
         // Existing migrations...
         if (from < 18) {
           // ... (keep existing logic if possible, but for simplicity relying on previous state)
@@ -243,6 +299,121 @@ class AppDatabase extends _$AppDatabase {
         if (from < 30) {
           // Create Reserved SKUs table
           await m.createTable(reservedSkus);
+        }
+        if (from < 31) {
+          // Create Customer Transactions table
+          await m.createTable(customerTransactions);
+        }
+        if (from < 32) {
+          // Create Supplier Transactions table
+          await m.createTable(supplierTransactions);
+        }
+        if (from < 33) {
+          print(
+            'DRIFT: Running migration from < 33 - Creating Purchase Receipts tables',
+          );
+          try {
+            await m.createTable(purchaseReceipts);
+            await m.createTable(purchaseReceiptItems);
+            print('DRIFT: Purchase Receipts tables created');
+          } catch (e) {
+            print('ERROR creating purchase_receipts tables: $e');
+          }
+        }
+        if (from < 34) {
+          print(
+            'DRIFT: Running migration to 34 - Creating Purchase Receipts tables',
+          );
+          try {
+            await m.createTable(purchaseReceipts);
+            await m.createTable(purchaseReceiptItems);
+            print('DRIFT: Purchase Receipts tables created successfully');
+          } catch (e) {
+            print('DRIFT: Tables may already exist or error: $e');
+          }
+        }
+
+        // Migration 38: Add version column to invoices table
+        if (from < 38) {
+          print(
+            'DRIFT: Running migration to 38 - Adding version column to invoices',
+          );
+          try {
+            await customStatement(
+              'ALTER TABLE invoices ADD COLUMN version INTEGER NOT NULL DEFAULT 1',
+            );
+            print('DRIFT: version column added to invoices');
+          } catch (e) {
+            print('DRIFT: version column may already exist: $e');
+          }
+        }
+
+        // Migration 39: UUID backfill + sync improvements
+        if (from < 39) {
+          print(
+            'DRIFT: Running migration 39 - UUID backfill + sync improvements',
+          );
+
+          try {
+            // UUID backfill for all tables
+            print('DRIFT: Backfilling UUIDs for units');
+            await customStatement(
+              "UPDATE units SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for categories');
+            await customStatement(
+              "UPDATE categories SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for brands');
+            await customStatement(
+              "UPDATE brands SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for products');
+            await customStatement(
+              "UPDATE products SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for customers');
+            await customStatement(
+              "UPDATE customers SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for suppliers');
+            await customStatement(
+              "UPDATE suppliers SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            print('DRIFT: Backfilling UUIDs for employees');
+            await customStatement(
+              "UPDATE employees SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = ''",
+            );
+
+            // Add columns to sync_outbox (if table exists)
+            try {
+              print('DRIFT: Adding retry columns to sync_outbox');
+              await customStatement(
+                "ALTER TABLE sync_outbox ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+              );
+              await customStatement(
+                "ALTER TABLE sync_outbox ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
+              );
+              await customStatement(
+                "ALTER TABLE sync_outbox ADD COLUMN last_error TEXT",
+              );
+              await customStatement(
+                "ALTER TABLE sync_outbox ADD COLUMN next_retry_at TEXT",
+              );
+            } catch (e) {
+              print('DRIFT: sync_outbox columns may already exist: $e');
+            }
+
+            print('DRIFT: Migration 39 completed');
+          } catch (e) {
+            print('DRIFT: Migration 39 error: $e');
+          }
         }
       },
       beforeOpen: (details) async {
@@ -497,20 +668,26 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // Joined query for history
-  Stream<List<TypedResult>> watchInvoicesWithCustomer() {
+  Stream<List<TypedResult>> watchInvoicesWithCustomer({int? tenantId}) {
     final query = select(invoices).join([
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
+    if (tenantId != null) {
+      query.where(invoices.tenantId.equals(tenantId));
+    }
     query.orderBy([OrderingTerm.desc(invoices.date)]);
     return query.watch();
   }
 
-  Stream<List<TypedResult>> watchInvoiceItemsDetailed() {
+  Stream<List<TypedResult>> watchInvoiceItemsDetailed({int? tenantId}) {
     final query = select(invoiceItems).join([
       innerJoin(invoices, invoices.id.equalsExp(invoiceItems.invoiceId)),
       innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
+    if (tenantId != null) {
+      query.where(invoices.tenantId.equals(tenantId));
+    }
     query.orderBy([
       OrderingTerm.desc(invoices.date),
       OrderingTerm.desc(invoiceItems.id),
@@ -524,9 +701,12 @@ class AppDatabase extends _$AppDatabase {
     String? queryStr,
     int? tenantId,
   }) {
+    print(
+      'DEBUG: getInvoiceItemsDetailedPaginated called with tenantId=$tenantId',
+    );
     final query = select(invoiceItems).join([
       innerJoin(invoices, invoices.id.equalsExp(invoiceItems.invoiceId)),
-      innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
+      leftOuterJoin(products, products.id.equalsExp(invoiceItems.productId)),
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
 
@@ -543,7 +723,9 @@ class AppDatabase extends _$AppDatabase {
       );
     }
 
-    query.where(invoices.isDeleted.equals(false) & invoiceItems.isDeleted.equals(false));
+    query.where(
+      invoices.isDeleted.equals(false) & invoiceItems.isDeleted.equals(false),
+    );
 
     query.orderBy([
       OrderingTerm.desc(invoices.date),
@@ -561,7 +743,7 @@ class AppDatabase extends _$AppDatabase {
 
     query.join([
       innerJoin(invoices, invoices.id.equalsExp(invoiceItems.invoiceId)),
-      innerJoin(products, products.id.equalsExp(invoiceItems.productId)),
+      leftOuterJoin(products, products.id.equalsExp(invoiceItems.productId)),
       leftOuterJoin(customers, customers.id.equalsExp(invoices.customerId)),
     ]);
 
@@ -584,25 +766,88 @@ class AppDatabase extends _$AppDatabase {
 
   // Clear all data from the database
   Future<void> clearAllData() async {
-    await transaction(() async {
-      // Delete in order respecting foreign key constraints
-      // Child tables first
+    print('CLEAR DB: start');
+
+    // Delete child tables first (FK constraints), then parent tables
+    // Each in try-catch to isolate failures
+    try {
       await delete(invoiceItems).go();
+      print('CLEAR DB: deleted invoiceItems');
+    } catch (e) {
+      print('CLEAR DB: FAILED on invoiceItems - $e');
+    }
+
+    try {
       await delete(invoices).go();
+      print('CLEAR DB: deleted invoices');
+    } catch (e) {
+      print('CLEAR DB: FAILED on invoices - $e');
+    }
 
-      // Then main entity tables
+    try {
       await delete(products).go();
-      await delete(tenants).go();
-      await delete(customers).go();
-      await delete(suppliers).go();
-      await delete(employees).go();
-      await delete(brands).go();
-      await delete(units).go();
-      await delete(categories).go();
+      print('CLEAR DB: deleted products');
+    } catch (e) {
+      print('CLEAR DB: FAILED on products - $e');
+    }
 
-      // Clear sync metadata to force full sync
+    try {
+      await delete(tenants).go();
+      print('CLEAR DB: deleted tenants');
+    } catch (e) {
+      print('CLEAR DB: FAILED on tenants - $e');
+    }
+
+    try {
+      await delete(customers).go();
+      print('CLEAR DB: deleted customers');
+    } catch (e) {
+      print('CLEAR DB: FAILED on customers - $e');
+    }
+
+    try {
+      await delete(suppliers).go();
+      print('CLEAR DB: deleted suppliers');
+    } catch (e) {
+      print('CLEAR DB: FAILED on suppliers - $e');
+    }
+
+    try {
+      await delete(employees).go();
+      print('CLEAR DB: deleted employees');
+    } catch (e) {
+      print('CLEAR DB: FAILED on employees - $e');
+    }
+
+    try {
+      await delete(brands).go();
+      print('CLEAR DB: deleted brands');
+    } catch (e) {
+      print('CLEAR DB: FAILED on brands - $e');
+    }
+
+    try {
+      await delete(units).go();
+      print('CLEAR DB: deleted units');
+    } catch (e) {
+      print('CLEAR DB: FAILED on units - $e');
+    }
+
+    try {
+      await delete(categories).go();
+      print('CLEAR DB: deleted categories');
+    } catch (e) {
+      print('CLEAR DB: FAILED on categories - $e');
+    }
+
+    try {
       await delete(syncMetadata).go();
-    });
+      print('CLEAR DB: deleted syncMetadata');
+    } catch (e) {
+      print('CLEAR DB: FAILED on syncMetadata - $e');
+    }
+
+    print('CLEAR DB: completed');
   }
 
   // SKU Counter methods
@@ -665,24 +910,59 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> reserveSku(String sku, int tenantId) async {
-    await into(reservedSkus).insert(
-      ReservedSkusCompanion.insert(
-        sku: sku,
-        tenantId: tenantId,
-      ),
-    );
+    await into(
+      reservedSkus,
+    ).insert(ReservedSkusCompanion.insert(sku: sku, tenantId: tenantId));
   }
 
   Future<bool> checkSkuExists(String sku, int tenantId) async {
-    final result = await (select(reservedSkus)
-          ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
-        .getSingleOrNull();
+    final result =
+        await (select(reservedSkus)
+              ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
+            .getSingleOrNull();
     if (result != null) return true;
 
     // Check products table too
-    final product = await (select(products)
-          ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
-        .getSingleOrNull();
+    final product =
+        await (select(products)
+              ..where((t) => t.sku.equals(sku) & t.tenantId.equals(tenantId)))
+            .getSingleOrNull();
     return product != null;
+  }
+
+  Future<void> _seedDefaultUnits() async {
+    final existingUnits = await select(units).get();
+    if (existingUnits.isNotEmpty) return;
+
+    final defaultUnits = [
+      UnitsCompanion.insert(
+        uuid: 'unit-gram',
+        name: 'Gram',
+        symbol: 'g',
+        tenantId: 1,
+      ),
+      UnitsCompanion.insert(
+        uuid: 'unit-kg',
+        name: 'Kilogram',
+        symbol: 'kg',
+        tenantId: 1,
+      ),
+      UnitsCompanion.insert(
+        uuid: 'unit-piece',
+        name: 'Piece',
+        symbol: 'pc',
+        tenantId: 1,
+      ),
+      UnitsCompanion.insert(
+        uuid: 'unit-packet',
+        name: 'Packet',
+        symbol: 'pkt',
+        tenantId: 1,
+      ),
+    ];
+
+    for (final unit in defaultUnits) {
+      await into(units).insert(unit);
+    }
   }
 }

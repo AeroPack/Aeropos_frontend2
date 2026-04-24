@@ -44,10 +44,18 @@ class CategoryViewModel {
   }
 
   Future<void> syncPendingCategories() async {
-    await _syncService.push();
+    try {
+      await _syncService.push();
+    } catch (e) {
+      print('CategoryViewModel syncPendingCategories error: $e');
+    }
   }
 
   Future<void> fetchAndSync() async {
-    await _syncService.pull();
+    try {
+      await _syncService.pull();
+    } catch (e) {
+      print('CategoryViewModel fetchAndSync error: $e');
+    }
   }
 }

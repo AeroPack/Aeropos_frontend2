@@ -354,7 +354,11 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
                           ? CachedNetworkImageProvider(userImage.toString())
                           : null,
                       child: !hasValidImage
-                          ? const Icon(Icons.person, size: 20, color: Colors.grey)
+                          ? const Icon(
+                              Icons.person,
+                              size: 20,
+                              color: Colors.grey,
+                            )
                           : null,
                     );
                   },
@@ -488,7 +492,7 @@ class MasterHeader extends ConsumerWidget implements PreferredSizeWidget {
     'Unit List': '/unit-list',
     'Brand List': '/brand-list',
     'Customers': '/customers',
-    'Suppliers': '/suppliers',
+    'Suppliers': '/supplier-ledger',
     'Sales History': '/sales-history',
     'New Invoice': '/new-invoice',
     'Point of Sale (POS)': '/pos',

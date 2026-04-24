@@ -1,9 +1,13 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/sku_generator.dart';
 import '../services/tenant_service.dart';
 import '../../config/app_config.dart';
 import '../services/sync_service.dart';
+import '../services/sync_engine.dart';
+import '../services/device_id_service.dart';
+import '../repositories/sync_repository.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/customer_repository.dart';
 import '../repositories/supplier_repository.dart';
@@ -12,6 +16,12 @@ import '../repositories/sale_repository.dart';
 import '../repositories/category_repository.dart';
 import '../repositories/unit_repository.dart';
 import '../repositories/brand_repository.dart';
+import '../repositories/customer_transaction_repository.dart';
+import '../repositories/customer_transaction_repository_impl.dart';
+import '../repositories/supplier_transaction_repository.dart';
+import '../repositories/supplier_transaction_repository_impl.dart';
+import '../repositories/purchase_receipt_repository.dart';
+import '../repositories/purchase_receipt_repository_impl.dart';
 import '../services/inventory_service.dart';
 import 'package:ezo/core/viewModel/product_view_model.dart';
 import 'package:ezo/core/viewModel/category_view_model.dart';
@@ -20,6 +30,9 @@ import 'package:ezo/core/viewModel/brand_view_model.dart';
 import 'package:ezo/core/viewModel/customer_view_model.dart';
 import 'package:ezo/core/viewModel/supplier_view_model.dart';
 import 'package:ezo/core/viewModel/employee_view_model.dart';
+import 'package:ezo/core/viewModel/customer_transaction_view_model.dart';
+import 'package:ezo/core/viewModel/supplier_transaction_view_model.dart';
+import 'package:ezo/core/viewModel/purchase_receipt_view_model.dart';
 import '../database/app_database.dart';
 import '../network/auth_interceptor.dart';
 import '../network/dio_client.dart';
@@ -46,14 +59,20 @@ class ServiceLocator {
   late final CategoryRepository categoryRepository;
   late final UnitRepository unitRepository;
   late final BrandRepository brandRepository;
+  late final CustomerTransactionRepository customerTransactionRepository;
+  late final SupplierTransactionRepository supplierTransactionRepository;
+  late final PurchaseReceiptRepository purchaseReceiptRepository;
   late final AuthRepository authRepository;
   late final AuthRemoteDataSource authRemoteDataSource;
   late final ProfileRepository profileRepository;
 
   late final InventoryService inventoryService;
   late final SyncService syncService;
+  late final SyncEngine syncEngine;
+  late final SyncRepository syncRepository;
   late final TenantService tenantService;
   late final SkuGenerator skuGenerator;
+  late final DeviceIdService deviceIdService;
 
   late final ProductViewModel productViewModel;
   late final CategoryViewModel categoryViewModel;
@@ -62,13 +81,23 @@ class ServiceLocator {
   late final CustomerViewModel customerViewModel;
   late final SupplierViewModel supplierViewModel;
   late final EmployeeViewModel employeeViewModel;
+  late final CustomerTransactionViewModel customerTransactionViewModel;
+  late final SupplierTransactionViewModel supplierTransactionViewModel;
+  late final PurchaseReceiptViewModel purchaseReceiptViewModel;
 
-  Future<void> initialize() async {
+Future<void> initialize() async {
     // Initialize database
     database = AppDatabase();
 
     // Initialize secure storage
-    secureStorage = const FlutterSecureStorage();
+    if (kIsWeb) {
+      secureStorage = const FlutterSecureStorage(
+        aOptions: AndroidOptions(),
+        iOptions: IOSOptions(),
+      );
+    } else {
+      secureStorage = const FlutterSecureStorage();
+    }
 
     // Initialize network
     final authInterceptor = AuthInterceptor(secureStorage);
@@ -86,6 +115,9 @@ class ServiceLocator {
     categoryRepository = CategoryRepository(database);
     unitRepository = UnitRepository(database);
     brandRepository = BrandRepository(database);
+    customerTransactionRepository = CustomerTransactionRepositoryImpl(database);
+    supplierTransactionRepository = SupplierTransactionRepositoryImpl(database);
+    purchaseReceiptRepository = PurchaseReceiptRepositoryImpl(database);
     authRepository = AuthRepositoryImpl(
       authRemoteDataSource,
       secureStorage,
@@ -94,19 +126,49 @@ class ServiceLocator {
     profileRepository = ProfileRepositoryImpl(
       http.Client(),
       secureStorage,
-      baseUrl: AppConfig.apiBaseUrl, // Use centralized config
+      baseUrl: AppConfig.apiBaseUrl,
     );
 
     // Initialize services
     tenantService = TenantService(secureStorage);
     await tenantService.initialize();
 
+    // Device ID for multi-device sync
+    deviceIdService = DeviceIdService(database);
+    final deviceId = await deviceIdService.getDeviceId();
+
     skuGenerator = SkuGenerator();
 
+    // Initialize sync infrastructure
     inventoryService = InventoryService(productRepository);
+
+    // Use nullable tenantId to prevent crash if not restored from storage
+    final currentTenantId =
+        tenantService.tenantIdOrNull?.toString() ?? 'pending';
+
+    syncRepository = SyncRepository(
+      db: database,
+      tenantId: currentTenantId,
+      companyId: 'default',
+      deviceId: deviceId,
+    );
+
+    syncEngine = SyncEngine(
+      db: database,
+      dio: dio,
+      tenantId: currentTenantId,
+      companyId: 'default',
+      deviceId: deviceId,
+    );
+
+    // Start background sync (only once)
+    // DISABLED - Using new SyncService instead, old SyncEngine causes conflicts
+    // syncEngine.startAutoSync();
+
+    // Keep old sync service for backward compatibility during migration
     syncService = SyncService(
       db: database,
-      dio: dio, // Injected shared Dio instance
+      dio: dio,
       productRepo: productRepository,
       customerRepo: customerRepository,
       supplierRepo: supplierRepository,
@@ -138,14 +200,29 @@ class ServiceLocator {
       supplierRepository,
       syncService,
     );
+    customerTransactionViewModel = CustomerTransactionViewModel(
+      customerTransactionRepository,
+      database,
+    );
+    supplierTransactionViewModel = SupplierTransactionViewModel(
+      supplierTransactionRepository,
+      database,
+    );
+    purchaseReceiptViewModel = PurchaseReceiptViewModel(
+      purchaseReceiptRepository,
+      database,
+    );
     employeeViewModel = EmployeeViewModel(
       database,
       employeeRepository,
       syncService,
     );
 
-    // Start auto-sync
-    syncService.startAutoSync(interval: const Duration(minutes: 5));
+    // Start auto-sync ONLY if tenant already restored from storage
+    // This prevents race condition where sync runs before tenant is ready
+    if (tenantService.tenantIdOrNull != null) {
+      syncService.startAutoSync(interval: const Duration(minutes: 5));
+    }
   }
 
   Future<void> dispose() async {

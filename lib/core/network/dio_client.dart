@@ -18,6 +18,9 @@ class DioClient {
 
     dio.interceptors.add(authInterceptor);
 
+    // Dio handles gzip compression automatically - don't set manually
+    // Remove manual gzip interceptor as it causes "unsafe header" error on web
+
     // Add logging interceptor for debug builds
     dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
 

@@ -38,10 +38,18 @@ class UnitViewModel {
   }
 
   Future<void> syncPendingUnits() async {
-    await _syncService.push();
+    try {
+      await _syncService.push();
+    } catch (e) {
+      print('UnitViewModel syncPendingUnits error: $e');
+    }
   }
 
   Future<void> fetchAndSync() async {
-    await _syncService.pull();
+    try {
+      await _syncService.pull();
+    } catch (e) {
+      print('UnitViewModel fetchAndSync error: $e');
+    }
   }
 }

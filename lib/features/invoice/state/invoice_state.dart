@@ -172,10 +172,12 @@ final customerListProvider = StreamProvider<List<CustomerEntity>>((ref) {
 
 final invoiceHistoryProvider = StreamProvider<List<TypedResult>>((ref) {
   final database = ServiceLocator.instance.database;
-  return database.watchInvoicesWithCustomer();
+  final tenantId = ServiceLocator.instance.tenantService.tenantId;
+  return database.watchInvoicesWithCustomer(tenantId: tenantId);
 });
 
 final detailedInvoiceItemsProvider = StreamProvider<List<TypedResult>>((ref) {
   final database = ServiceLocator.instance.database;
-  return database.watchInvoiceItemsDetailed();
+  final tenantId = ServiceLocator.instance.tenantService.tenantId;
+  return database.watchInvoiceItemsDetailed(tenantId: tenantId);
 });

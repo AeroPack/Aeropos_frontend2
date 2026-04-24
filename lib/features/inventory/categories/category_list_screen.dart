@@ -20,7 +20,6 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {

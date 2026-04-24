@@ -49,7 +49,8 @@ dependencies:
   google_fonts: ^6.1.0
   lucide_icons: ^0.257.0
   excel: ^4.0.6
-  web: ^1.0.0
+  file_picker: ^8.0.0
+  share_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:
@@ -69,40 +70,34 @@ flutter:
 
  
   # Fonts section - ALL fonts defined here
-  fonts:
-    # Inter font
+fonts:
     - family: Inter
       fonts:
-        - asset: fonts/Inter-Regular.ttf
-        - asset: fonts/Inter-Bold.ttf
-          weight: 700
-    
-    # Roboto font
-    - family: Roboto
-      fonts:
-        - asset: fonts/Roboto-Regular.ttf
-        - asset: fonts/Roboto-Bold.ttf
-          weight: 700
-    
-    # Montserrat font
-    - family: Montserrat
-      fonts:
-        - asset: fonts/Montserrat-Regular.ttf
-        - asset: fonts/Montserrat-Bold.ttf
-          weight: 700
-    
-    # Playfair Display font
-    - family: Playfair Display
-      fonts:
-        - asset: fonts/PlayfairDisplay-Regular.ttf
-        - asset: fonts/PlayfairDisplay-Bold.ttf
-          weight: 700
-    
-    # JetBrains Mono font
-    - family: JetBrains Mono
-      fonts:
-        - asset: fonts/JetBrainsMono-Regular.ttf
-        - asset: fonts/JetBrainsMono-Bold.ttf
+        - asset: assets/fonts/Inter-Regular.ttf   # ✅
+        - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
 
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+        - asset: assets/fonts/Montserrat-Bold.ttf
+          weight: 700
+
+    - family: Playfair Display
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
   # DO NOT add flutter_web_plugins here - it's already in dependencies

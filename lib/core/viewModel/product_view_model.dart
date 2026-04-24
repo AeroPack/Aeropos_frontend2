@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' as drift;
 import '../database/app_database.dart';
+import '../database/tables/product_units_table.dart';
 import '../services/sync_service.dart';
 import 'package:uuid/uuid.dart';
 import '../repositories/category_repository.dart';
@@ -14,7 +15,7 @@ class ProductViewModel {
   final AppDatabase _database;
   final CategoryRepository _categoryRepository;
   final UnitRepository _unitRepository;
-  final BrandRepository _brandRepository; // Added
+  final BrandRepository _brandRepository;
   final SyncService _syncService;
   final _uuid = const Uuid();
 
@@ -22,26 +23,21 @@ class ProductViewModel {
     this._database,
     this._categoryRepository,
     this._unitRepository,
-    this._brandRepository, // Added
+    this._brandRepository,
     this._syncService,
   );
 
-  // Expose database for table access
   AppDatabase get database => _database;
 
-  // Expose stream of products from DB
   Stream<List<ProductEntity>> get allProducts => _database.watchAllProducts();
 
-  // Expose stream of products with category names
   Stream<List<drift.TypedResult>> get allProductsWithCategory =>
       _database.watchProductsWithCategory();
 
-  // Expose streams from repositories
   Stream<List<Category>> get allCategories =>
       _categoryRepository.watchAllCategories();
   Stream<List<Unit>> get allUnits => _unitRepository.watchAllUnits();
-  Stream<List<Brand>> get allBrands =>
-      _brandRepository.watchAllBrands(); // Added
+  Stream<List<Brand>> get allBrands => _brandRepository.watchAllBrands();
 
   Future<void> addProduct({
     required String name,
@@ -123,14 +119,50 @@ class ProductViewModel {
   }
 
   Future<void> syncPendingProducts() async {
-    await _syncService.push();
+    try {
+      await _syncService.push();
+    } catch (e) {
+      print('ProductViewModel syncPendingProducts error: $e');
+    }
   }
 
   Future<void> fetchAndSync() async {
-    await _syncService.pull();
+    try {
+      await _syncService.pull();
+    } catch (e) {
+      print('ProductViewModel fetchAndSync error: $e');
+    }
   }
 
   Future<String> generateNextSku() async {
     return await ServiceLocator.instance.skuGenerator.generateNextSku();
+  }
+
+  Future<void> saveProductUnit(ProductUnitsCompanion unit) async {
+    await _database.into(_database.productUnits).insert(unit);
+  }
+
+  Future<void> updateProductUnit(ProductUnitsCompanion unit) async {
+    await (_database.update(
+      _database.productUnits,
+    )..where((t) => t.id.equals(unit.id.value))).write(unit);
+  }
+
+  Future<List<ProductUnitEntity>> getProductUnits(int productId) async {
+    return await (_database.select(
+      _database.productUnits,
+    )..where((t) => t.productId.equals(productId))).get();
+  }
+
+  Future<void> deleteProductUnits(int productId) async {
+    await (_database.delete(
+      _database.productUnits,
+    )..where((t) => t.productId.equals(productId))).go();
+  }
+
+  Future<void> deleteProductUnit(int id) async {
+    await (_database.delete(
+      _database.productUnits,
+    )..where((t) => t.id.equals(id))).go();
   }
 }

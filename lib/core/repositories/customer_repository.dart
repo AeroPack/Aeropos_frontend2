@@ -1,8 +1,8 @@
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
-import '../models/user.dart'; // Retaining User model for now but ideally should be Customer
-import '../models/enums/sync_status.dart';
+import '../models/user.dart';
 import '../di/service_locator.dart';
+import 'sync_repository.dart';
 
 class CustomerRepository {
   final AppDatabase _database;
@@ -35,62 +35,99 @@ class CustomerRepository {
   }
 
   Future<int> createCustomer(User user) async {
-    final companion = CustomersCompanion(
-      uuid: Value(user.uuid),
-      name: Value(user.name),
-      phone: Value(user.phone),
-      email: Value(user.email),
-      address: Value(user.address),
-      creditLimit: Value(user.creditLimit),
-      currentBalance: Value(user.currentBalance),
-      // Default tenantId to 1 for now until we handle multi-tenancy context
-      tenantId: const Value(1),
-      syncStatus: Value(SyncStatus.pending.value),
-      isDeleted: Value(user.isDeleted),
-    );
-    final id = await _database.into(_database.customers).insert(companion);
-    ServiceLocator.instance.syncService.sync();
-    return id;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+
+    return await _database.transaction(() async {
+      final companion = CustomersCompanion.insert(
+        uuid: user.uuid,
+        name: user.name,
+        phone: Value(user.phone),
+        email: Value(user.email),
+        address: Value(user.address),
+        creditLimit: Value(user.creditLimit),
+        currentBalance: Value(user.currentBalance),
+        tenantId: 1,
+        isDeleted: Value(user.isDeleted),
+      );
+      final id = await _database.into(_database.customers).insert(companion);
+
+      await syncRepo.logOperation(
+        entity: 'customers',
+        entityId: user.uuid,
+        opType: SyncOpType.insert,
+        data: user.toJson(),
+      );
+
+      return id;
+    });
   }
 
   Future<bool> updateCustomer(User user) async {
-    final companion = CustomersCompanion(
-      id: Value(user.id),
-      uuid: Value(user.uuid),
-      name: Value(user.name),
-      phone: Value(user.phone),
-      email: Value(user.email),
-      address: Value(user.address),
-      creditLimit: Value(user.creditLimit),
-      currentBalance: Value(user.currentBalance),
-      updatedAt: Value(DateTime.now()),
-      syncStatus: Value(SyncStatus.pending.value),
-      isDeleted: Value(user.isDeleted),
-    );
-    final success = await _database
-        .update(_database.customers)
-        .replace(companion);
-    if (success) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return success;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    return await _database.transaction(() async {
+      final companion = CustomersCompanion(
+        id: Value(user.id),
+        uuid: Value(user.uuid),
+        name: Value(user.name),
+        phone: Value(user.phone),
+        email: Value(user.email),
+        address: Value(user.address),
+        creditLimit: Value(user.creditLimit),
+        currentBalance: Value(user.currentBalance),
+        tenantId: const Value(1),
+        updatedAt: Value(now),
+        isDeleted: Value(user.isDeleted),
+      );
+      final success = await _database
+          .update(_database.customers)
+          .replace(companion);
+
+      if (success) {
+        await syncRepo.logOperation(
+          entity: 'customers',
+          entityId: user.uuid,
+          opType: SyncOpType.update,
+          data: user.toJson(),
+        );
+      }
+
+      return success;
+    });
   }
 
   Future<int> deleteCustomer(int id) async {
-    final result =
-        await (_database.update(
-          _database.customers,
-        )..where((t) => t.id.equals(id))).write(
-          CustomersCompanion(
-            isDeleted: const Value(true),
-            syncStatus: Value(SyncStatus.pending.value),
-            updatedAt: Value(DateTime.now()),
-          ),
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    final entity = await (_database.select(
+      _database.customers,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (entity == null) return 0;
+
+    return await _database.transaction(() async {
+      final result =
+          await (_database.update(
+            _database.customers,
+          )..where((t) => t.id.equals(id))).write(
+            CustomersCompanion(
+              isDeleted: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
+
+      if (result > 0) {
+        await syncRepo.logOperation(
+          entity: 'customers',
+          entityId: entity.uuid,
+          opType: SyncOpType.delete,
+          data: _mapToDomain(entity).toJson(),
         );
-    if (result > 0) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return result;
+      }
+
+      return result;
+    });
   }
 
   User _mapToDomain(CustomerEntity entity) {
@@ -101,10 +138,9 @@ class CustomerRepository {
       phone: entity.phone,
       email: entity.email,
       address: entity.address,
-      role: 'customer', // Hardcoded as we are in CustomerRepository
+      role: 'customer',
       creditLimit: entity.creditLimit,
       currentBalance: entity.currentBalance,
-      syncStatus: SyncStatus.fromValue(entity.syncStatus),
       isDeleted: entity.isDeleted,
     );
   }

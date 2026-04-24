@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
 import 'package:drift/drift.dart';
@@ -11,34 +12,40 @@ class DeviceIdService {
 
   String? _cachedDeviceId;
 
-  /// Get a unique device identifier
-  /// Format: First 4 chars of hostname or platform + random suffix
   Future<String> getDeviceId() async {
     if (_cachedDeviceId != null) {
       return _cachedDeviceId!;
     }
 
-    // Check database for existing device ID
-    final record = await (_database.select(
-      _database.syncMetadata,
-    )..where((t) => t.key.equals(_deviceIdKey))).getSingleOrNull();
-
     String deviceId;
-    if (record == null || record.value == null) {
-      // Generate new device ID
+
+    if (kIsWeb) {
       deviceId = await _generateDeviceId();
-      // Store in database
-      await _database
-          .into(_database.syncMetadata)
-          .insertOnConflictUpdate(
-            SyncMetadataCompanion(
-              key: const Value(_deviceIdKey),
-              value: Value(deviceId),
-              updatedAt: Value(DateTime.now()),
-            ),
-          );
-    } else {
-      deviceId = record.value!;
+      _cachedDeviceId = deviceId;
+      return deviceId;
+    }
+
+    try {
+      final record = await (_database.select(
+        _database.syncMetadata,
+      )..where((t) => t.key.equals(_deviceIdKey))).getSingleOrNull();
+
+      if (record == null || record.value == null) {
+        deviceId = await _generateDeviceId();
+        await _database
+            .into(_database.syncMetadata)
+            .insertOnConflictUpdate(
+              SyncMetadataCompanion(
+                key: const Value(_deviceIdKey),
+                value: Value(deviceId),
+                updatedAt: Value(DateTime.now()),
+              ),
+            );
+      } else {
+        deviceId = record.value!;
+      }
+    } catch (e) {
+      deviceId = await _generateDeviceId();
     }
 
     _cachedDeviceId = deviceId;
@@ -47,32 +54,35 @@ class DeviceIdService {
 
   Future<String> _generateDeviceId() async {
     try {
-      // Try to get hostname
-      final hostname = Platform.localHostname;
-      // Take first 4 characters of hostname, uppercase, alphanumeric only
-      final cleaned = hostname.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-      final prefix = cleaned.isEmpty
-          ? 'DEV'
-          : cleaned.toUpperCase().substring(
-              0,
-              cleaned.length >= 4 ? 4 : cleaned.length,
-            );
+      String prefix;
+      if (Platform.isAndroid ||
+          Platform.isIOS ||
+          Platform.isMacOS ||
+          Platform.isWindows ||
+          Platform.isLinux) {
+        final hostname = Platform.localHostname;
+        final cleaned = hostname.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+        prefix = cleaned.isEmpty
+            ? 'DEV'
+            : cleaned.toUpperCase().substring(
+                  0,
+                  cleaned.length >= 4 ? 4 : cleaned.length,
+                );
+      } else {
+        prefix = 'WEB';
+      }
 
-      // Add a random suffix to ensure uniqueness
       final uuid = const Uuid();
       final suffix = uuid.v4().substring(0, 4).toUpperCase();
 
       return '$prefix$suffix';
     } catch (e) {
-      // Fallback: use platform name + random ID
-      final platform = Platform.operatingSystem.substring(0, 3).toUpperCase();
       final uuid = const Uuid();
       final suffix = uuid.v4().substring(0, 5).toUpperCase();
-      return '$platform$suffix';
+      return 'DEV$suffix';
     }
   }
 
-  /// Reset device ID (useful for testing)
   Future<void> resetDeviceId() async {
     await (_database.delete(
       _database.syncMetadata,

@@ -324,7 +324,7 @@ class _DualScreenLayoutState extends BasePosLayoutState<DualScreenLayout> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Qty: ${item.quantity}  ×  Rs ${item.product.price.toInt()}',
+                'Qty: ${item.quantity}${item.selectedUnit?.unitSymbol != null ? ' ${item.selectedUnit!.unitSymbol}' : ''}  ×  Rs ${item.product.price.toInt()}',
                 style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
               ),
             ],

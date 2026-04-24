@@ -25,8 +25,22 @@ class AuthRepositoryImpl implements AuthRepository {
     );
     // Only store token if login is complete (not company selection)
     final token = response['token'];
+    print(
+      'DEBUG [AuthRepository] Login response token: ${token != null ? "${token.substring(0, 20)}..." : "NULL"}',
+    );
     if (token != null) {
       await _storage.write(key: 'auth_token', value: token);
+      print('DEBUG [AuthRepository] Token written to storage');
+
+      // Store company.id for X-Company-Id header
+      final company = response['company'] as Map<String, dynamic>?;
+      if (company != null) {
+        final companyId = company['id']?.toString();
+        if (companyId != null) {
+          await _storage.write(key: 'company_id', value: companyId);
+          print('DEBUG [AuthRepository] Company ID written to storage: $companyId');
+        }
+      }
     }
     return response;
   }

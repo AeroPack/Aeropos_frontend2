@@ -1,6 +1,7 @@
 class Company {
   final int id;
   final String uuid;
+  final int? tenantId;
   final String businessName;
   final String? businessAddress;
   final String? taxId;
@@ -14,6 +15,7 @@ class Company {
   Company({
     required this.id,
     required this.uuid,
+    this.tenantId,
     required this.businessName,
     this.businessAddress,
     this.taxId,
@@ -29,6 +31,7 @@ class Company {
     return Company(
       id: json['id'] ?? 0,
       uuid: json['uuid'] ?? '',
+      tenantId: json['tenantId'] ?? json['tenant_id'],
       businessName: json['businessName'] ?? json['business_name'] ?? '',
       businessAddress: json['businessAddress'] ?? json['business_address'],
       taxId: json['taxId'] ?? json['tax_id'],
@@ -45,6 +48,7 @@ class Company {
     return {
       'id': id,
       'uuid': uuid,
+      'tenantId': tenantId,
       'businessName': businessName,
       'businessAddress': businessAddress,
       'taxId': taxId,
@@ -60,6 +64,7 @@ class Company {
   Company copyWith({
     int? id,
     String? uuid,
+    int? tenantId,
     String? businessName,
     String? businessAddress,
     String? taxId,
@@ -73,6 +78,7 @@ class Company {
     return Company(
       id: id ?? this.id,
       uuid: uuid ?? this.uuid,
+      tenantId: tenantId ?? this.tenantId,
       businessName: businessName ?? this.businessName,
       businessAddress: businessAddress ?? this.businessAddress,
       taxId: taxId ?? this.taxId,

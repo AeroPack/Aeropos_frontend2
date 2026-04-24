@@ -5,6 +5,9 @@ import 'package:ezo/core/widgets/customer_form_dialog.dart';
 import 'package:ezo/core/widgets/master_header.dart';
 import 'package:ezo/core/widgets/pos_toast.dart';
 import 'package:ezo/features/sales/screens/invoice_preview_screen.dart';
+import 'package:ezo/features/pos/widgets/quantity_with_unit_dialog.dart';
+import 'package:ezo/core/models/product_unit.dart';
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -709,7 +712,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                               onPressed: () {
                                 ref
                                     .read(cartProvider.notifier)
-                                    .updateItemDiscount(item.product, 0, false);
+                                    .updateItemDiscount(
+                                      item.product,
+                                      0,
+                                      false,
+                                      selectedUnit: item.selectedUnit,
+                                      modifiers: item.modifiers,
+                                      course: item.course,
+                                    );
                                 Navigator.pop(context);
                               },
                               icon: Icon(
@@ -773,6 +783,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                     item.product,
                                     d,
                                     isPercent,
+                                    selectedUnit: item.selectedUnit,
+                                    modifiers: item.modifiers,
+                                    course: item.course,
                                   );
                               Navigator.pop(context);
                             },
@@ -966,7 +979,70 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     VoidCallback onBack, {
     Key? key,
   }) {
-    void onProductTap(p) => cartNotifier.addProduct(p);
+    Future<void> onProductTap(ProductEntity product) async {
+      final db = ServiceLocator.instance.database;
+
+      final productUnits =
+          await (db.select(db.productUnits)
+                ..where((t) => t.productId.equals(product.id))
+                ..orderBy([(t) => OrderingTerm.desc(t.conversionFactor)]))
+              .get();
+
+      // Cache product units for price calculation
+      cartNotifier.setProductUnitsCache(product.id, productUnits);
+
+      ProductUnit? selectedUnit;
+
+      if (productUnits.isNotEmpty) {
+        final defaultUnit = productUnits.firstWhere(
+          (u) => u.isDefault,
+          orElse: () => productUnits.first,
+        );
+
+        final unit = await (db.select(
+          db.units,
+        )..where((t) => t.id.equals(defaultUnit.unitId))).getSingleOrNull();
+
+        selectedUnit = ProductUnit(
+          id: defaultUnit.id,
+          productId: defaultUnit.productId,
+          unitId: defaultUnit.unitId,
+          conversionFactor: defaultUnit.conversionFactor,
+          sellingPrice: defaultUnit.sellingPrice,
+          barcode: defaultUnit.barcode,
+          isDefault: defaultUnit.isDefault,
+          unitName: unit?.name,
+          unitSymbol: unit?.symbol,
+        );
+      }
+
+      // If multiple units, show dialog first; if single unit, add directly
+      if (productUnits.length > 1) {
+        // Show QuantityWithUnitDialog for multi-unit products
+        if (!context.mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (dialogCtx) => QuantityWithUnitDialog(
+            product: product,
+            currentUnit: null,
+            currentQuantity: 1.0,
+            productUnits: productUnits,
+            onSave: (qty, unit) {
+              cartNotifier.addProduct(
+                product,
+                quantity: qty,
+                selectedUnit: unit,
+              );
+            },
+          ),
+        );
+      } else {
+        // Single unit - add directly to cart
+        cartNotifier.addProduct(product, selectedUnit: selectedUnit);
+      }
+    }
+
     void onCategoryTap(id) =>
         ref.read(selectedCategoryProvider.notifier).state = id;
 

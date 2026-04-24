@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
 import 'package:ezo/core/widgets/product_image.dart';
 import 'package:ezo/core/theme/app_theme.dart';
+import 'package:ezo/core/models/product_unit.dart';
 
 /// Reusable cart item tile for POS layouts.
 class PosCartItemTile extends StatelessWidget {
@@ -77,9 +78,7 @@ class PosCartItemTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -122,7 +121,10 @@ class PosCartItemTile extends StatelessWidget {
                     if (item.course != null) ...[
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
@@ -138,27 +140,37 @@ class PosCartItemTile extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (item.modifiers != null && item.modifiers!.isNotEmpty) ...[
+                    if (item.modifiers != null &&
+                        item.modifiers!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
-                        children: item.modifiers!.map((m) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.grey100),
-                          ),
-                          child: Text(
-                            m,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        )).toList(),
+                        children: item.modifiers!
+                            .map(
+                              (m) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.grey100),
+                                ),
+                                child: Text(
+                                  m,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.text.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ],
                   ],
@@ -167,14 +179,19 @@ class PosCartItemTile extends StatelessWidget {
               _buildQtyControls(),
               const SizedBox(width: AppSpacing.md),
               GestureDetector(
-                onTap: () => cartNotifier.addProduct(item.product, modifiers: item.modifiers, course: item.course), // In true app, this might be split, but remove is priority
+                onTap: () => cartNotifier.addProduct(
+                  item.product,
+                  modifiers: item.modifiers,
+                  course: item.course,
+                ), // In true app, this might be split, but remove is priority
                 child: Container(), // Dummy for space
               ),
               GestureDetector(
                 onTap: () => cartNotifier.removeProduct(
-                  item.product, 
-                  modifiers: item.modifiers, 
-                  course: item.course
+                  item.product,
+                  selectedUnit: item.selectedUnit,
+                  modifiers: item.modifiers,
+                  course: item.course,
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(4),
@@ -182,7 +199,11 @@ class PosCartItemTile extends StatelessWidget {
                     color: AppColors.error.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(Icons.close, size: 16, color: AppColors.error),
+                  child: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AppColors.error,
+                  ),
                 ),
               ),
             ],
@@ -190,10 +211,87 @@ class PosCartItemTile extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _detailCol('RATE', 'Rs ${item.product.price.toStringAsFixed(2)}'),
-              _detailCol('QTY', '${item.quantity}'),
-              _detailCol('TOTAL', 'Rs ${item.total.toStringAsFixed(2)}', isPrimary: true),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RATE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.grey400,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.selectedUnit != null
+                          ? '₹${item.unitPrice.toStringAsFixed(2)}/${item.selectedUnit!.unitSymbol ?? ''}'
+                          : '₹${item.unitPrice.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.grey700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'QTY',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.grey400,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.selectedUnit != null
+                          ? '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 2)} ${item.selectedUnit!.unitSymbol ?? ''}'
+                          : '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 2)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.grey700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'TOTAL',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.grey400,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹${item.total.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -209,7 +307,7 @@ class PosCartItemTile extends StatelessWidget {
         _circleBtn(
           Icons.remove,
           () => cartNotifier.updateQuantity(
-            item.product, 
+            item.product,
             item.quantity - 1,
             modifiers: item.modifiers,
             course: item.course,
@@ -220,7 +318,9 @@ class PosCartItemTile extends StatelessWidget {
           width: compact ? 24 : 32,
           alignment: Alignment.center,
           child: Text(
-            '${item.quantity}',
+            item.selectedUnit != null
+                ? '${item.quantity.toInt()} ${item.selectedUnit!.unitSymbol ?? ''}'
+                : '${item.quantity.toInt()}',
             style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: compact ? 12 : 14,
@@ -231,7 +331,7 @@ class PosCartItemTile extends StatelessWidget {
         _circleBtn(
           Icons.add,
           () => cartNotifier.updateQuantity(
-            item.product, 
+            item.product,
             item.quantity + 1,
             modifiers: item.modifiers,
             course: item.course,
@@ -243,7 +343,12 @@ class PosCartItemTile extends StatelessWidget {
     );
   }
 
-  Widget _circleBtn(IconData icon, VoidCallback onTap, double size, {bool isPrimary = false}) {
+  Widget _circleBtn(
+    IconData icon,
+    VoidCallback onTap,
+    double size, {
+    bool isPrimary = false,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),

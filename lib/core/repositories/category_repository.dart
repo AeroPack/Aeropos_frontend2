@@ -1,8 +1,8 @@
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
 import '../models/category.dart';
-import '../models/enums/sync_status.dart';
 import '../di/service_locator.dart';
+import 'sync_repository.dart';
 
 class CategoryRepository {
   final AppDatabase _database;
@@ -24,9 +24,6 @@ class CategoryRepository {
   }
 
   Future<Category?> getCategoryById(int id) async {
-    // This method is not directly supported by the basic DAO generated,
-    // but we can filter the list or add a specific query in DAO if needed.
-    // For now, implementing via getAll for simplicity, optimizing later if needed.
     final all = await getAllCategories();
     try {
       return all.firstWhere((c) => c.id == id);
@@ -36,57 +33,95 @@ class CategoryRepository {
   }
 
   Future<int> createCategory(Category category) async {
-    final companion = CategoriesCompanion(
-      uuid: Value(category.uuid),
-      name: Value(category.name),
-      subcategory: Value(category.subcategory),
-      description: Value(category.description),
-      isActive: Value(category.isActive),
-      tenantId: const Value(1),
-      syncStatus: Value(SyncStatus.pending.value),
-      isDeleted: Value(category.isDeleted),
-    );
-    final id = await _database.into(_database.categories).insert(companion);
-    ServiceLocator.instance.syncService.sync();
-    return id;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final tenantId = category.id > 0 ? 0 : 1;
+
+    return await _database.transaction(() async {
+      final companion = CategoriesCompanion.insert(
+        uuid: category.uuid,
+        name: category.name,
+        subcategory: Value(category.subcategory),
+        description: Value(category.description),
+        isActive: Value(category.isActive),
+        tenantId: tenantId,
+        isDeleted: Value(category.isDeleted),
+      );
+      final id = await _database.into(_database.categories).insert(companion);
+
+      await syncRepo.logOperation(
+        entity: 'categories',
+        entityId: category.uuid,
+        opType: SyncOpType.insert,
+        data: category.toJson(),
+      );
+
+      return id;
+    });
   }
 
   Future<bool> updateCategory(Category category) async {
-    final companion = CategoriesCompanion(
-      id: Value(category.id),
-      uuid: Value(category.uuid),
-      name: Value(category.name),
-      subcategory: Value(category.subcategory),
-      description: Value(category.description),
-      isActive: Value(category.isActive),
-      updatedAt: Value(DateTime.now()),
-      syncStatus: Value(SyncStatus.pending.value),
-      isDeleted: Value(category.isDeleted),
-    );
-    final success = await _database
-        .update(_database.categories)
-        .replace(companion);
-    if (success) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return success;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    return await _database.transaction(() async {
+      final companion = CategoriesCompanion(
+        id: Value(category.id),
+        uuid: Value(category.uuid),
+        name: Value(category.name),
+        subcategory: Value(category.subcategory),
+        description: Value(category.description),
+        isActive: Value(category.isActive),
+        updatedAt: Value(now),
+        isDeleted: Value(category.isDeleted),
+      );
+      final success = await _database
+          .update(_database.categories)
+          .replace(companion);
+
+      if (success) {
+        await syncRepo.logOperation(
+          entity: 'categories',
+          entityId: category.uuid,
+          opType: SyncOpType.update,
+          data: category.toJson(),
+        );
+      }
+
+      return success;
+    });
   }
 
   Future<int> deleteCategory(int id) async {
-    final result =
-        await (_database.update(
-          _database.categories,
-        )..where((t) => t.id.equals(id))).write(
-          CategoriesCompanion(
-            isDeleted: const Value(true),
-            syncStatus: Value(SyncStatus.pending.value),
-            updatedAt: Value(DateTime.now()),
-          ),
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    final entity = await (_database.select(
+      _database.categories,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (entity == null) return 0;
+
+    return await _database.transaction(() async {
+      final result =
+          await (_database.update(
+            _database.categories,
+          )..where((t) => t.id.equals(id))).write(
+            CategoriesCompanion(
+              isDeleted: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
+
+      if (result > 0) {
+        await syncRepo.logOperation(
+          entity: 'categories',
+          entityId: entity.uuid,
+          opType: SyncOpType.delete,
+          data: _mapToDomain(entity).toJson(),
         );
-    if (result > 0) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return result;
+      }
+
+      return result;
+    });
   }
 
   Category _mapToDomain(CategoryEntity entity) {
@@ -97,7 +132,6 @@ class CategoryRepository {
       subcategory: entity.subcategory,
       description: entity.description,
       isActive: entity.isActive,
-      syncStatus: SyncStatus.fromValue(entity.syncStatus),
       isDeleted: entity.isDeleted,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,

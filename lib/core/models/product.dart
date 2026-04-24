@@ -1,4 +1,5 @@
 import 'enums/sync_status.dart';
+import 'product_unit.dart';
 
 class Product {
   final int id;
@@ -7,6 +8,8 @@ class Product {
   final String sku;
   final int? categoryId;
   final int? unitId;
+  final int? baseUnitId;
+  final bool allowLooseSale;
   final String? type;
   final String? packSize;
   final double price;
@@ -27,6 +30,7 @@ class Product {
   final double discount;
   final bool isPercentDiscount;
   final int? tenantId;
+  final List<ProductUnit> availableUnits;
 
   Product({
     required this.id,
@@ -35,6 +39,8 @@ class Product {
     required this.sku,
     this.categoryId,
     this.unitId,
+    this.baseUnitId,
+    this.allowLooseSale = true,
     this.type,
     this.packSize,
     required this.price,
@@ -54,6 +60,7 @@ class Product {
     this.discount = 0.0,
     this.isPercentDiscount = false,
     this.tenantId,
+    this.availableUnits = const [],
   });
 
   Product copyWith({
@@ -63,6 +70,8 @@ class Product {
     String? sku,
     int? categoryId,
     int? unitId,
+    int? baseUnitId,
+    bool? allowLooseSale,
     String? type,
     String? packSize,
     double? price,
@@ -82,6 +91,7 @@ class Product {
     double? discount,
     bool? isPercentDiscount,
     int? tenantId,
+    List<ProductUnit>? availableUnits,
   }) {
     return Product(
       id: id ?? this.id,
@@ -90,6 +100,8 @@ class Product {
       sku: sku ?? this.sku,
       categoryId: categoryId ?? this.categoryId,
       unitId: unitId ?? this.unitId,
+      baseUnitId: baseUnitId ?? this.baseUnitId,
+      allowLooseSale: allowLooseSale ?? this.allowLooseSale,
       type: type ?? this.type,
       packSize: packSize ?? this.packSize,
       price: price ?? this.price,
@@ -109,6 +121,36 @@ class Product {
       discount: discount ?? this.discount,
       isPercentDiscount: isPercentDiscount ?? this.isPercentDiscount,
       tenantId: tenantId ?? this.tenantId,
+      availableUnits: availableUnits ?? this.availableUnits,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'uuid': uuid,
+    'name': name,
+    'sku': sku,
+    'category_id': categoryId,
+    'unit_id': unitId,
+    'base_unit_id': baseUnitId,
+    'allow_loose_sale': allowLooseSale,
+    'type': type,
+    'pack_size': packSize,
+    'price': price,
+    'cost': cost,
+    'stock_quantity': stockQuantity,
+    'is_active': isActive,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'is_deleted': isDeleted,
+    'image_url': imageUrl,
+    'local_path': localPath,
+    'brand_id': brandId,
+    'description': description,
+    'gst_type': gstType,
+    'gst_rate': gstRate,
+    'discount': discount,
+    'is_percent_discount': isPercentDiscount,
+    'tenant_id': tenantId,
+  };
 }

@@ -9,6 +9,7 @@ class InvoiceItems extends Table {
   IntColumn get quantity => integer()();
   IntColumn get bonus => integer().withDefault(const Constant(0))();
   RealColumn get unitPrice => real()();
+  RealColumn get returnedQuantity => real().withDefault(const Constant(0.0))();
   RealColumn get discount => real().withDefault(const Constant(0.0))();
   RealColumn get totalPrice => real()();
 

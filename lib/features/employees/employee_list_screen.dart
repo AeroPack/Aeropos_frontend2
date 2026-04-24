@@ -22,7 +22,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {
@@ -148,8 +147,15 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                                                   employee: filteredData[index],
                                                 ),
                                                 onDelete: () =>
-                                                    _viewModel.deleteEmployee(
-                                                      filteredData[index].id,
+                                                    _showDeleteConfirmationDialog(
+                                                      context,
+                                                      'Delete Employee',
+                                                      'Are you sure you want to delete this employee? This action cannot be undone.',
+                                                      () => _viewModel
+                                                          .deleteEmployee(
+                                                            filteredData[index]
+                                                                .id,
+                                                          ),
                                                     ),
                                               );
                                             },
@@ -482,6 +488,38 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       ),
     );
   }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _EmployeeTableRow extends StatelessWidget {
@@ -601,6 +639,38 @@ class _EmployeeTableRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(icon, size: 14, color: color),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+// import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
 import '../di/service_locator.dart';
-// import '../models/enums/sync_status.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/customer_repository.dart';
 import '../repositories/supplier_repository.dart';
@@ -15,25 +16,17 @@ import '../repositories/unit_repository.dart';
 import '../repositories/brand_repository.dart';
 import '../../config/app_config.dart';
 
-// Sync result tracking
-class SyncResult {
-  final bool success;
-  final Map<String, int> syncedCounts;
-  final Map<String, int> failedCounts;
-  final List<String> errors;
+final _uuidRegex = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  caseSensitive: false,
+);
 
-  SyncResult({
-    required this.success,
-    required this.syncedCounts,
-    required this.failedCounts,
-    required this.errors,
-  });
+class SyncValidationError implements Exception {
+  final String message;
+  SyncValidationError(this.message);
 
-  bool get hasFailures => failedCounts.values.any((count) => count > 0);
-  int get totalSynced =>
-      syncedCounts.values.fold(0, (sum, count) => sum + count);
-  int get totalFailed =>
-      failedCounts.values.fold(0, (sum, count) => sum + count);
+  @override
+  String toString() => 'SyncValidationError: $message';
 }
 
 class PendingChangesDetail {
@@ -70,6 +63,82 @@ class PendingChangesDetail {
   bool get hasPending => total > 0;
 }
 
+bool isValidUUID(String? value) {
+  if (value == null || value.isEmpty) return false;
+  return _uuidRegex.hasMatch(value);
+}
+
+Future<void> validateProductForSync(AppDatabase db, ProductEntity prod) async {
+  if (prod.unitId != null) {
+    final unit = await (db.select(
+      db.units,
+    )..where((t) => t.id.equals(prod.unitId!))).getSingleOrNull();
+    if (unit == null) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid unit reference (unit not found)',
+      );
+    }
+    if (!isValidUUID(unit.uuid)) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid unit UUID for unit ID ${prod.unitId}',
+      );
+    }
+  }
+  if (prod.categoryId != null) {
+    final cat = await (db.select(
+      db.categories,
+    )..where((t) => t.id.equals(prod.categoryId!))).getSingleOrNull();
+    if (cat == null) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid category reference (category not found)',
+      );
+    }
+    if (!isValidUUID(cat.uuid)) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid category UUID for category ID ${prod.categoryId}',
+      );
+    }
+  }
+  if (prod.brandId != null) {
+    final brand = await (db.select(
+      db.brands,
+    )..where((t) => t.id.equals(prod.brandId!))).getSingleOrNull();
+    if (brand == null) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid brand reference (brand not found)',
+      );
+    }
+    if (!isValidUUID(brand.uuid)) {
+      throw SyncValidationError(
+        'Product ${prod.id} has invalid brand UUID for brand ID ${prod.brandId}',
+      );
+    }
+  }
+}
+
+class SyncResult {
+  final bool success;
+  final Map<String, int> syncedCounts;
+  final Map<String, int> failedCounts;
+  final List<String> errors;
+
+  SyncResult({
+    required this.success,
+    required this.syncedCounts,
+    required this.failedCounts,
+    required this.errors,
+  });
+
+  bool get hasFailures => failedCounts.values.any((count) => count > 0);
+  int get totalSynced =>
+      syncedCounts.values.fold(0, (sum, count) => sum + count);
+  int get totalFailed =>
+      failedCounts.values.fold(0, (sum, count) => sum + count);
+}
+
+@Deprecated(
+  'Use SyncEngine from sync_engine.dart instead. Will be removed after v2.0. Migration required.',
+)
 class SyncService {
   final AppDatabase db;
   final Dio dio;
@@ -104,6 +173,23 @@ class SyncService {
     dio.options.baseUrl = AppConfig.apiBaseUrl;
     dio.options.connectTimeout = const Duration(seconds: 10);
     dio.options.receiveTimeout = const Duration(seconds: 10);
+    print(
+      '[DEPRECATED] SyncService is deprecated. Use SyncEngine instead. Migration required.',
+    );
+    _initializeDeviceId();
+    // Reset flags in case a previous run crashed and left them true
+    _isSyncing = false;
+    _isPulling = false;
+  }
+
+  Future<void> _initializeDeviceId() async {
+    final storage = ServiceLocator.instance.secureStorage;
+    String? deviceId = await storage.read(key: 'device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await storage.write(key: 'device_id', value: deviceId);
+      print('[SYNC] Generated new device ID: $deviceId');
+    }
   }
 
   void startAutoSync({Duration interval = const Duration(minutes: 5)}) {
@@ -126,7 +212,7 @@ class SyncService {
   Future<void> sync() async {
     // Only debounce if not already syncing
     if (_isSyncing) return;
-    
+
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = Timer(const Duration(seconds: 2), () {
       _doSync();
@@ -134,17 +220,27 @@ class SyncService {
   }
 
   Future<void> _doSync() async {
-    if (_isSyncing) return;
-
-    // Skip sync if no auth token exists (user not logged in)
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'auth_token');
-    if (token == null || token.isEmpty) return;
-
+    if (_isSyncing) {
+      print('DEBUG SYNC: Already syncing - skipping');
+      return;
+    }
     _isSyncing = true;
 
     try {
-      await push();
+      final storage = ServiceLocator.instance.secureStorage;
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || token.isEmpty) {
+        print('DEBUG SYNC: No auth token - skipping');
+        return;
+      }
+
+      final tenantId = ServiceLocator.instance.tenantService.tenantIdOrNull;
+      if (tenantId == null || tenantId <= 0) {
+        print('DEBUG SYNC: Invalid tenantId=$tenantId - skipping');
+        return;
+      }
+
+      // await push(); // Uncomment when push is ready
       await pull();
     } on Object catch (_) {
     } finally {
@@ -294,47 +390,363 @@ class SyncService {
     }
   }
 
+  // ----------------------------------------------------------------------
+  // PULL (updated with correct payload and header handling)
+  // ----------------------------------------------------------------------
   Future<void> pull() async {
-    if (_isPulling) return;
+    if (_isPulling) {
+      print('[SYNC] pull() already in progress, skipping');
+      return;
+    }
+
     _isPulling = true;
+    print('[SYNC] pull() STARTING with tenantId=$_tenantId');
 
     try {
-      // Skip pull if no auth token exists (user not logged in)
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'auth_token');
-      if (token == null || token.isEmpty) return;
-
-      // Force full sync if database is empty
-      final productCount = await (db.select(db.products)..limit(1)).get();
-      if (productCount.isEmpty) {
-        // Clear the lastSyncTime to force a full sync
-        await (db.delete(
-          db.syncMetadata,
-        )..where((t) => t.key.equals('lastSyncTime'))).go();
-      }
-
-      var lastSyncTime = await _getLastSyncTime();
-
-      final response = await dio.post(
-        'api/sync',
-        data: {'lastSyncTime': lastSyncTime?.toIso8601String()},
-      );
-
-      if (response.statusCode == 200) {
-        final responseData = response.data as Map<String, dynamic>;
-        final updates = responseData['updates'] as Map<String, dynamic>?;
-        if (updates != null) {
-          updates.forEach((key, value) {
-            if (value is List) {}
-          });
-          await _applyUpdates(updates);
-        }
-        await _updateLastSyncTime(DateTime.now());
-      }
+      await _doPull();
     } catch (e) {
-      if (e is DioException) {}
+      print('[SYNC] pull() ERROR: $e');
+      rethrow;
     } finally {
       _isPulling = false;
+      print('[SYNC] pull() finished, flag reset');
+    }
+  }
+
+  // Separate inner method for pull logic
+  Future<void> _doPull() async {
+    print('[DIAG] 1: enter _doPull');
+
+    final currentTenantId =
+        ServiceLocator.instance.tenantService.tenantIdOrNull;
+    if (currentTenantId == null || currentTenantId <= 0) {
+      print('[SYNC] Invalid tenantId=$currentTenantId - skipping pull');
+      return;
+    }
+
+    final storage = ServiceLocator.instance.secureStorage;
+    final token = await storage.read(key: 'auth_token');
+    if (token == null || token.isEmpty) {
+      print('[SYNC] No auth token - skipping pull');
+      return;
+    }
+
+    // Ensure company_id is stored (needed for X-Company-Id header)
+    String? companyId = await storage.read(key: 'company_id');
+    if (companyId == null || companyId.isEmpty) {
+      print('[SYNC] Warning: company_id not found in storage.');
+    }
+
+    print('[DIAG] 2: before deviceId');
+    // Get or generate device ID
+    String? deviceId = await storage.read(key: 'device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await storage.write(key: 'device_id', value: deviceId);
+      print('[SYNC] Generated new device ID: $deviceId');
+    }
+    print('[DIAG] 3: after deviceId: $deviceId');
+
+    print('[DIAG] 4: before lastSyncTime');
+    final lastSyncTime = await _getLastSyncTime();
+    final lastCursor = await _getLastSyncCursor();
+    print('[DIAG] 5: after lastSyncTime: $lastSyncTime');
+
+    print('[DIAG] 6: before payload');
+    // NEW payload format matching backend contract
+    final syncPayload = {
+      'deviceId': deviceId,
+      'lastPulledAt':
+          lastSyncTime?.toUtc().toIso8601String() ?? '2026-01-01T00:00:00.000Z',
+      'operations': <Map<String, dynamic>>[],
+    };
+    print('[SYNC][PULL] Payload: ${jsonEncode(syncPayload)}');
+    print(
+      '[SYNC][PULL] Requesting since: ${lastSyncTime?.toIso8601String() ?? "null"}',
+    );
+    print('[SYNC][PULL] Tenant: $_tenantId');
+
+    print('[DIAG] 7: about to call dio.post');
+    final response = await dio
+        .post(
+          'api/sync',
+          data: syncPayload,
+          options: Options(
+            sendTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
+        )
+        .timeout(
+          const Duration(seconds: 35),
+          onTimeout: () => throw TimeoutException('Sync request timed out'),
+        );
+
+    print('[SYNC][PULL] Response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final responseData = response.data as Map<String, dynamic>;
+
+      // NEW operation-based response format
+      final operations = responseData['operations'] as List<dynamic>?;
+
+      if (operations != null && operations.isNotEmpty) {
+        print('[SYNC][PULL] Received ${operations.length} operations');
+
+        // Process operations one by one with explicit logging
+        for (var op in operations) {
+          print('[SYNC] Processing: ${op['type']} on ${op['table']}');
+          await _processOperation(op);
+        }
+      } else {
+        print('[SYNC][PULL] No operations to process');
+      }
+
+      // Store nextCursor for future incremental syncs
+      final nextCursor = responseData['nextCursor'] as String?;
+      if (nextCursor != null) {
+        await _updateLastSyncCursor(nextCursor);
+      }
+
+      await _updateLastSyncTime(DateTime.now());
+      print('[SYNC][PULL] ✓ Completed');
+    }
+  }
+
+  // Process individual operation (new operation-based format)
+  Future<void> _processOperation(Map<String, dynamic> op) async {
+    final table = op['table'] as String?;
+    final type = op['type'] as String?;
+    final data = op['data'] as Map<String, dynamic>?;
+    final recordId = op['recordId'] as String?;
+
+    if (table == null || type == null) {
+      print('[SYNC][PULL] Skipping op - missing table or type');
+      return;
+    }
+
+    print('[SYNC][PULL] $type on $table (recordId: $recordId)');
+
+    switch (table) {
+      case 'units':
+        await _upsertUnit(data);
+        break;
+      case 'categories':
+        await _upsertCategory(data);
+        break;
+      case 'brands':
+        await _upsertBrand(data);
+        break;
+      case 'products':
+        await _upsertProduct(data);
+        break;
+      case 'customers':
+        await _upsertCustomer(data);
+        break;
+      case 'suppliers':
+        await _upsertSupplier(data);
+        break;
+      case 'employees':
+        await _upsertEmployee(data);
+        break;
+      case 'invoices':
+        await _upsertInvoice(data);
+        break;
+      default:
+        print('[SYNC][PULL] Unknown table: $table');
+    }
+  }
+
+  // Individual upsert handlers
+  Future<void> _upsertUnit(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.units)
+        .insertOnConflictUpdate(
+          UnitsCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            symbol: Value(data['symbol'] as String? ?? ''),
+            isActive: Value(data['is_active'] as bool? ?? true),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertCategory(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.categories)
+        .insertOnConflictUpdate(
+          CategoriesCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            subcategory: Value(data['subcategory'] as String?),
+            description: Value(data['description'] as String?),
+            isActive: Value(data['is_active'] as bool? ?? true),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertBrand(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.brands)
+        .insertOnConflictUpdate(
+          BrandsCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            description: Value(data['description'] as String?),
+            isActive: Value(data['is_active'] as bool? ?? true),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertProduct(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.products)
+        .insertOnConflictUpdate(
+          ProductsCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            sku: Value(data['sku'] as String?),
+            price: Value((data['price'] as num?)?.toDouble() ?? 0.0),
+            cost: Value((data['cost'] as num?)?.toDouble()),
+            stockQuantity: Value(data['stock_quantity'] as int? ?? 0),
+            isActive: Value(data['is_active'] as bool? ?? true),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertCustomer(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.customers)
+        .insertOnConflictUpdate(
+          CustomersCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            phone: Value(data['phone'] as String?),
+            email: Value(data['email'] as String?),
+            address: Value(data['address'] as String?),
+            creditLimit: Value(
+              (data['credit_limit'] as num?)?.toDouble() ?? 0.0,
+            ),
+            currentBalance: Value(
+              (data['current_balance'] as num?)?.toDouble() ?? 0.0,
+            ),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertSupplier(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.suppliers)
+        .insertOnConflictUpdate(
+          SuppliersCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            phone: Value(data['phone'] as String?),
+            email: Value(data['email'] as String?),
+            address: Value(data['address'] as String?),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertEmployee(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.employees)
+        .insertOnConflictUpdate(
+          EmployeesCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            name: Value(data['name'] as String? ?? ''),
+            phone: Value(data['phone'] as String?),
+            email: Value(data['email'] as String?),
+            address: Value(data['address'] as String?),
+            role: Value(data['role'] as String? ?? 'employee'),
+            password: Value(data['password'] as String?),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _upsertInvoice(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    await db
+        .into(db.invoices)
+        .insertOnConflictUpdate(
+          InvoicesCompanion(
+            uuid: Value(data['uuid'] as String? ?? ''),
+            invoiceNumber: Value(data['invoice_number'] as String? ?? ''),
+            customerId: Value(data['customer_id'] as int?),
+            date: Value(
+              data['created_at'] != null
+                  ? DateTime.parse(data['created_at'])
+                  : DateTime.now(),
+            ),
+            subtotal: Value((data['subtotal'] as num?)?.toDouble() ?? 0.0),
+            tax: Value((data['tax'] as num?)?.toDouble() ?? 0.0),
+            discount: Value((data['discount'] as num?)?.toDouble() ?? 0.0),
+            total: Value((data['total'] as num?)?.toDouble() ?? 0.0),
+            paymentMethod: Value(data['payment_method'] as String?),
+            tenantId: Value(data['company_id'] as int? ?? _tenantId),
+            updatedAt: Value(DateTime.now()),
+            syncStatus: const Value(0),
+            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          ),
+        );
+  }
+
+  Future<void> _updateLastSyncCursor(String cursor) async {
+    try {
+      await db
+          .into(db.syncMetadata)
+          .insertOnConflictUpdate(
+            SyncMetadataCompanion(
+              key: const Value('lastSyncCursor'),
+              value: Value(cursor),
+              updatedAt: Value(DateTime.now()),
+            ),
+          );
+    } catch (_) {}
+  }
+
+  Future<String?> _getLastSyncCursor() async {
+    try {
+      final record = await (db.select(
+        db.syncMetadata,
+      )..where((t) => t.key.equals('lastSyncCursor'))).getSingleOrNull();
+      return record?.value;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -342,33 +754,59 @@ class SyncService {
   /// Useful for initial loads or when you need to fetch all historical data
   Future<void> forcePull() async {
     try {
-      final response = await dio.post(
-        'api/sync',
-        data: {
-          'lastSyncTime': null, // Force full sync by passing null
-        },
-      );
+      final storage = ServiceLocator.instance.secureStorage;
+      String? deviceId = await storage.read(key: 'device_id');
+      if (deviceId == null) {
+        deviceId = const Uuid().v4();
+        await storage.write(key: 'device_id', value: deviceId);
+        print('[SYNC] Generated new device ID: $deviceId');
+      }
+
+      print('[SYNC][FORCE PULL] Starting full sync with deviceId: $deviceId');
+
+      final response = await dio
+          .post(
+            'api/sync',
+            data: {
+              'deviceId': deviceId,
+              'lastPulledAt': null, // null triggers full sync from server
+              'operations': <Map<String, dynamic>>[],
+            },
+            options: Options(
+              sendTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 30),
+            ),
+          )
+          .timeout(
+            const Duration(seconds: 35),
+            onTimeout: () => throw TimeoutException('Force pull timed out'),
+          );
 
       if (response.statusCode == 200) {
         final responseData = response.data as Map<String, dynamic>;
         final updates = responseData['updates'] as Map<String, dynamic>?;
         if (updates != null) {
-          // Log specific table counts
-          updates.forEach((key, value) {
-            if (value is List) {}
-          });
+          print('[SYNC][FORCE PULL] Applying updates...');
           await _applyUpdates(updates);
+          print('[SYNC][FORCE PULL] ✓ Full sync completed');
         }
-        // Update lastSyncTime to now so future incremental syncs work correctly
         await _updateLastSyncTime(DateTime.now());
+      } else {
+        print(
+          '[SYNC][FORCE PULL] Unexpected status code: ${response.statusCode}',
+        );
       }
     } catch (e) {
-      if (e is DioException) {}
-      rethrow; // Re-throw to allow caller to handle
+      print('[SYNC][FORCE PULL] ERROR - $e');
+      rethrow;
     }
   }
 
+  // ----------------------------------------------------------------------
+  // PUSH (existing implementation)
+  // ----------------------------------------------------------------------
   Future<SyncResult> push() async {
+    print('DEBUG SYNC: push() STARTING with tenantId=$_tenantId');
     final syncedCounts = <String, int>{
       'categories': 0,
       'units': 0,
@@ -396,6 +834,8 @@ class SyncService {
       final pendingCategories = await (db.select(
         db.categories,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][categories] → ${pendingCategories.length} ops');
+
       for (final cat in pendingCategories) {
         final success = await _pushEntity(
           'api/categories',
@@ -428,6 +868,8 @@ class SyncService {
       final pendingUnits = await (db.select(
         db.units,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][units] → ${pendingUnits.length} ops');
+
       for (final unit in pendingUnits) {
         final success = await _pushEntity(
           'api/units',
@@ -459,6 +901,8 @@ class SyncService {
       final pendingBrands = await (db.select(
         db.brands,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][brands] → ${pendingBrands.length} ops');
+
       for (final brand in pendingBrands) {
         final success = await _pushEntity(
           'api/brands',
@@ -490,6 +934,7 @@ class SyncService {
       final pendingProducts = await (db.select(
         db.products,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][products] → ${pendingProducts.length} ops');
 
       const int productBatchSize = 25;
       for (var i = 0; i < pendingProducts.length; i += productBatchSize) {
@@ -500,16 +945,36 @@ class SyncService {
         final List<Map<String, dynamic>> batchData = [];
 
         for (final prod in chunk) {
+          // Validate references before creating payload
+          try {
+            await validateProductForSync(db, prod);
+          } catch (e) {
+            print('[SYNC][PUSH][products] VALIDATION FAILED → ${prod.id}');
+            // Mark as failed instead of sending
+            await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
+                .write(const ProductsCompanion(syncStatus: Value(2)));
+            failedCounts['products'] = failedCounts['products']! + 1;
+            errors.add('Product ${prod.id}: $e');
+            continue;
+          }
+
           final unit = prod.unitId != null
-              ? await (db.select(db.units)..where((t) => t.id.equals(prod.unitId!))).getSingleOrNull()
+              ? await (db.select(
+                  db.units,
+                )..where((t) => t.id.equals(prod.unitId!))).getSingleOrNull()
               : null;
           final category = prod.categoryId != null
-              ? await (db.select(db.categories)..where((t) => t.id.equals(prod.categoryId!))).getSingleOrNull()
+              ? await (db.select(db.categories)
+                      ..where((t) => t.id.equals(prod.categoryId!)))
+                    .getSingleOrNull()
               : null;
           final brand = prod.brandId != null
-              ? await (db.select(db.brands)..where((t) => t.id.equals(prod.brandId!))).getSingleOrNull()
+              ? await (db.select(
+                  db.brands,
+                )..where((t) => t.id.equals(prod.brandId!))).getSingleOrNull()
               : null;
 
+          // CRITICAL: Only send UUIDs, no integer IDs
           batchData.add({
             'uuid': prod.uuid,
             'name': prod.name,
@@ -517,12 +982,9 @@ class SyncService {
             'price': prod.price,
             'cost': prod.cost,
             'stockQuantity': prod.stockQuantity,
-            'categoryId': prod.categoryId,
-            'categoryUuid': category?.uuid,
-            'unitId': prod.unitId,
-            'unitUuid': unit?.uuid,
-            'brandId': prod.brandId,
-            'brandUuid': brand?.uuid,
+            'categoryUuid': category?.uuid ?? '', // UUID only
+            'unitUuid': unit?.uuid ?? '', // UUID only
+            'brandUuid': brand?.uuid ?? '', // UUID only
             'gstType': prod.gstType,
             'gstRate': prod.gstRate,
             'imageUrl': prod.imageUrl,
@@ -561,6 +1023,8 @@ class SyncService {
       final pendingCustomers = await (db.select(
         db.customers,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][customers] → ${pendingCustomers.length} ops');
+
       for (final customer in pendingCustomers) {
         final success = await _pushEntity(
           'api/customers',
@@ -575,12 +1039,14 @@ class SyncService {
             'companyId': _tenantId,
           },
           () async {
-            await (db.update(db.customers)..where((t) => t.id.equals(customer.id)))
+            await (db.update(db.customers)
+                  ..where((t) => t.id.equals(customer.id)))
                 .write(const CustomersCompanion(syncStatus: Value(0)));
           },
           'Customer: ${customer.name}',
           onPermanentFailure: () async {
-            await (db.update(db.customers)..where((t) => t.id.equals(customer.id)))
+            await (db.update(db.customers)
+                  ..where((t) => t.id.equals(customer.id)))
                 .write(const CustomersCompanion(syncStatus: Value(2)));
           },
         );
@@ -595,6 +1061,8 @@ class SyncService {
       final pendingSuppliers = await (db.select(
         db.suppliers,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][suppliers] → ${pendingSuppliers.length} ops');
+
       for (final supplier in pendingSuppliers) {
         final success = await _pushEntity(
           'api/suppliers',
@@ -607,12 +1075,14 @@ class SyncService {
             'companyId': _tenantId,
           },
           () async {
-            await (db.update(db.suppliers)..where((t) => t.id.equals(supplier.id)))
+            await (db.update(db.suppliers)
+                  ..where((t) => t.id.equals(supplier.id)))
                 .write(const SuppliersCompanion(syncStatus: Value(0)));
           },
           'Supplier: ${supplier.name}',
           onPermanentFailure: () async {
-            await (db.update(db.suppliers)..where((t) => t.id.equals(supplier.id)))
+            await (db.update(db.suppliers)
+                  ..where((t) => t.id.equals(supplier.id)))
                 .write(const SuppliersCompanion(syncStatus: Value(2)));
           },
         );
@@ -627,6 +1097,8 @@ class SyncService {
       final pendingEmployees = await (db.select(
         db.employees,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][employees] → ${pendingEmployees.length} ops');
+
       for (final employee in pendingEmployees) {
         final success = await _pushEntity(
           'api/employees',
@@ -642,12 +1114,14 @@ class SyncService {
             'companyId': _tenantId,
           },
           () async {
-            await (db.update(db.employees)..where((t) => t.id.equals(employee.id)))
+            await (db.update(db.employees)
+                  ..where((t) => t.id.equals(employee.id)))
                 .write(const EmployeesCompanion(syncStatus: Value(0)));
           },
           'Employee: ${employee.name}',
           onPermanentFailure: () async {
-            await (db.update(db.employees)..where((t) => t.id.equals(employee.id)))
+            await (db.update(db.employees)
+                  ..where((t) => t.id.equals(employee.id)))
                 .write(const EmployeesCompanion(syncStatus: Value(2)));
           },
         );
@@ -658,19 +1132,24 @@ class SyncService {
         }
       }
 
-      // Invoices
+      // Invoices (with invoice items - NOT synced independently)
       final pendingInvoices = await (db.select(
         db.invoices,
       )..where((t) => t.syncStatus.equals(1))).get();
+      print('[SYNC][PUSH][invoices] → ${pendingInvoices.length} ops');
+
       for (final inv in pendingInvoices) {
-        final itemsWithProducts = await (db.select(
-          db.invoiceItems,
-        ).join([
-          innerJoin(db.products, db.products.id.equalsExp(db.invoiceItems.productId)),
+        final itemsWithProducts = await (db.select(db.invoiceItems).join([
+          innerJoin(
+            db.products,
+            db.products.id.equalsExp(db.invoiceItems.productId),
+          ),
         ])..where(db.invoiceItems.invoiceId.equals(inv.id))).get();
 
         final customer = inv.customerId != null
-            ? await (db.select(db.customers)..where((t) => t.id.equals(inv.customerId!))).getSingleOrNull()
+            ? await (db.select(
+                db.customers,
+              )..where((t) => t.id.equals(inv.customerId!))).getSingleOrNull()
             : null;
 
         final success = await _pushEntity(
@@ -739,6 +1218,7 @@ class SyncService {
     Future<void> Function()? onPermanentFailure,
   }) async {
     try {
+      // X-Company-Id handled by AuthInterceptor - no manual header needed
       final response = await dio.post(endpoint, data: data);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await onSuccess();

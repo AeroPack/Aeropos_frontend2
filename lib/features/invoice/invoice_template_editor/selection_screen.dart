@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/core/widgets/master_header.dart';
 import 'package:ezo/features/invoice/invoice_template_editor/template_repository.dart';
@@ -53,11 +54,11 @@ class _SelectionScreenState extends ConsumerState<SelectionScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.go('/dashboard'),
               tooltip: 'Back to Dashboard',
             ),
             InkWell(
-              onTap: () => Navigator.of(context).pop(),
+              onTap: () => context.go('/dashboard'),
               child: const Padding(
                 padding: EdgeInsets.only(right: 8),
                 child: Row(

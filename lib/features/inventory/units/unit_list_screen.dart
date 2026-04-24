@@ -19,7 +19,6 @@ class _UnitListScreenState extends State<UnitListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {

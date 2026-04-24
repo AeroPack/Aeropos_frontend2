@@ -22,7 +22,6 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {
@@ -148,8 +147,15 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                                                   supplier: filteredData[index],
                                                 ),
                                                 onDelete: () =>
-                                                    _viewModel.deleteSupplier(
-                                                      filteredData[index].id,
+                                                    _showDeleteConfirmationDialog(
+                                                      context,
+                                                      'Delete Supplier',
+                                                      'Are you sure you want to delete this supplier? This action cannot be undone.',
+                                                      () => _viewModel
+                                                          .deleteSupplier(
+                                                            filteredData[index]
+                                                                .id,
+                                                          ),
                                                     ),
                                               );
                                             },
@@ -462,6 +468,38 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       ),
     );
   }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SupplierTableRow extends StatelessWidget {
@@ -539,7 +577,7 @@ class _SupplierTableRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              "\$0.00",
+              "\Rs 0.00",
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),

@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/product_card.dart';
 import 'package:ezo/features/pos/widgets/common/totals_display.dart';
+import 'package:ezo/features/pos/widgets/quantity_with_unit_dialog.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
-import 'package:ezo/core/theme/app_theme.dart';
 import 'package:ezo/core/database/app_database.dart';
 
 class CompactLayout extends BasePosLayout {
@@ -47,7 +47,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
   final _searchController = TextEditingController();
   final _customerSearchController = TextEditingController();
   final _notesController = TextEditingController();
-  bool _showCart = true;
+  final bool _showCart = true;
   bool _showNotes = false;
   bool _showBarcodeScan = false;
   bool _showCustomerSearch = false;
@@ -58,7 +58,6 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
 
   // Primary blue color scheme
   static const Color _primaryBlue = Color(0xFF1976D2);
-  static const Color _primaryBlueLight = Color(0xFF42A5F5);
   static const Color _primaryBlueDark = Color(0xFF0D47A1);
   static const Color _accentBlue = Color(0xFF2196F3);
 
@@ -515,7 +514,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
   }
 
   void _addToCart(ProductEntity product) {
-    widget.cartNotifier.addProduct(product);
+    widget.onProductTap(product);
     setState(() {
       _recentItems.removeWhere((p) => p.id == product.id);
       _recentItems.insert(0, product);
@@ -523,14 +522,6 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
         _recentItems.removeLast();
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${product.name} added to cart'),
-        backgroundColor: _primaryBlue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   Widget _buildCartHeader() {
@@ -597,6 +588,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildCustomerSearchPanel() {
     final customer = widget.cartState.selectedCustomer;
     final customerSearch = ref.watch(customerSearchProvider);
@@ -923,7 +915,7 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
                     vertical: 4,
                   ),
                   child: Text(
-                    '${item.quantity}',
+                    '${item.quantity}${item.selectedUnit?.unitSymbol != null ? ' ${item.selectedUnit!.unitSymbol}' : ''}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
@@ -948,7 +940,10 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
               _compactIconBtn(
                 Icons.delete_outline,
                 'Remove',
-                () => widget.cartNotifier.removeProduct(item.product),
+                () => widget.cartNotifier.removeProduct(
+                  item.product,
+                  selectedUnit: item.selectedUnit,
+                ),
                 isDestructive: true,
               ),
             ],
@@ -998,112 +993,22 @@ class _CompactLayoutState extends BasePosLayoutState<CompactLayout> {
   }
 
   void _showQuantityDialog(CartItem item) {
-    final controller = TextEditingController(text: '${item.quantity}');
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'SET QUANTITY',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1,
-                color: _primaryBlue,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              item.product.name,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [1, 2, 3, 5, 10].map((qty) {
-                return InkWell(
-                  onTap: () => controller.text = qty.toString(),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: int.tryParse(controller.text) == qty
-                          ? _primaryBlue
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$qty',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: int.tryParse(controller.text) == qty
-                            ? Colors.white
-                            : Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              autofocus: true,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'CANCEL',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              final qty = double.tryParse(controller.text) ?? 1.0;
-              widget.cartNotifier.updateQuantity(item.product, qty);
-              Navigator.pop(ctx);
-            },
-            child: const Text(
-              'UPDATE',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+      builder: (ctx) => QuantityWithUnitDialog(
+        product: item.product,
+        currentUnit: item.selectedUnit,
+        currentQuantity: item.quantity,
+        productUnits: const [],
+        onSave: (qty, unit) {
+          widget.cartNotifier.updateQuantity(
+            item.product,
+            qty,
+            selectedUnit: unit,
+            modifiers: item.modifiers,
+            course: item.course,
+          );
+        },
       ),
     );
   }

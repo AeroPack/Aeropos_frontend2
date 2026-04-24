@@ -16,6 +16,7 @@ import 'package:ezo/core/widgets/brand_form_dialog.dart';
 import 'package:ezo/core/widgets/unit_form_dialog.dart';
 import 'package:ezo/core/di/service_locator.dart';
 import 'package:ezo/core/database/app_database.dart';
+import 'package:ezo/core/database/tables/product_units_table.dart';
 import 'package:ezo/core/viewModel/product_view_model.dart';
 import 'package:ezo/core/models/category.dart';
 import 'package:ezo/core/models/unit.dart';
@@ -23,9 +24,32 @@ import 'package:ezo/core/models/brand.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:uuid/uuid.dart';
 // Add these imports after existing ones
 // import 'package:ezo/core/utils/sku_generator.dart';
 // import 'package:connectivity_plus/connectivity_plus.dart';
+
+class _ProductUnitEntry {
+  int? id;
+  int? unitId;
+  double conversionFactor;
+  double? sellingPrice;
+  String? barcode;
+  bool isDefault;
+  String? unitName;
+  String? unitSymbol;
+
+  _ProductUnitEntry({
+    this.id,
+    this.unitId,
+    this.conversionFactor = 1.0,
+    this.sellingPrice,
+    this.barcode,
+    this.isDefault = false,
+    this.unitName,
+    this.unitSymbol,
+  });
+}
 
 class AddItemScreen extends StatefulWidget {
   final ProductEntity? product;
@@ -55,6 +79,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   static const List<String> _gstRates = ['0%', '5%', '12%', '18%', '28%'];
   static const List<String> _gstTypes = ['Inclusive', 'Exclusive'];
 
+  List<_ProductUnitEntry> _productUnits = [];
+  bool _unitsExpanded = false;
+
   final _imagePicker = ImagePicker();
   XFile? _selectedImageFile;
   Uint8List? _selectedImageBytes; // for web preview
@@ -73,7 +100,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
       _skuController.text = p.sku ?? '';
       _priceController.text = p.price.toString();
       _costController.text = p.cost?.toString() ?? '';
-      // Removed stockController initialization
       _descController.text = '';
       _selectedBrandId = p.brandId;
       _selectedCategoryId = p.categoryId;
@@ -81,11 +107,36 @@ class _AddItemScreenState extends State<AddItemScreen> {
       _selectedGstType = p.gstType;
       _selectedGstRate = p.gstRate;
       _currentLocalPath = p.localPath;
-      // Pre-load existing imageUrl (includes Base64 data URIs saved on web)
       _imageUrl = p.imageUrl;
       _discountController.text = p.discount.toString();
       _isPercentDiscount = p.isPercentDiscount;
+
+      _loadProductUnits(p.id);
     }
+  }
+
+  Future<void> _loadProductUnits(int productId) async {
+    final units = await _viewModel.getProductUnits(productId);
+    final allUnits = await _viewModel.database
+        .select(_viewModel.database.units)
+        .get();
+    final unitMap = {for (var u in allUnits) u.id: u};
+
+    setState(() {
+      _productUnits = units.map((pu) {
+        final u = unitMap[pu.unitId];
+        return _ProductUnitEntry(
+          id: pu.id,
+          unitId: pu.unitId,
+          conversionFactor: pu.conversionFactor,
+          sellingPrice: pu.sellingPrice,
+          barcode: pu.barcode,
+          isDefault: pu.isDefault,
+          unitName: u?.name,
+          unitSymbol: u?.symbol,
+        );
+      }).toList();
+    });
   }
 
   @override
@@ -235,13 +286,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
       }
       if (discount < 0) discount = 0;
 
+      final uuid = const Uuid();
+      int? productId;
+
       if (widget.product == null) {
         await _viewModel.addProduct(
           name: _nameController.text,
           sku: _skuController.text,
           price: price,
           cost: double.tryParse(_costController.text) ?? 0.0,
-          stockQuantity: 0.0, // Default to 0
+          stockQuantity: 0.0,
           categoryId: _selectedCategoryId,
           unitId: _selectedUnitId,
           brandId: _selectedBrandId,
@@ -253,6 +307,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
           discount: discount,
           isPercentDiscount: _isPercentDiscount,
         );
+
+        final newProduct = await (_viewModel.database.select(
+          _viewModel.database.products,
+        )..where((t) => t.sku.equals(_skuController.text))).getSingleOrNull();
+        productId = newProduct?.id;
       } else {
         final updatedProduct = widget.product!.copyWith(
           name: _nameController.text,
@@ -261,7 +320,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
           price: double.tryParse(_priceController.text) ?? 0.0,
           cost: drift.Value(double.tryParse(_costController.text)),
-          // Keep existing stockQuantity, don't update it
           categoryId: drift.Value(_selectedCategoryId),
           unitId: drift.Value(_selectedUnitId),
           brandId: drift.Value(_selectedBrandId),
@@ -276,6 +334,43 @@ class _AddItemScreenState extends State<AddItemScreen> {
           updatedAt: DateTime.now(),
         );
         await _viewModel.updateProduct(updatedProduct);
+        productId = widget.product!.id;
+      }
+
+      if (productId != null) {
+        await _viewModel.deleteProductUnits(productId);
+
+        int? defaultUnitId;
+        for (final unit in _productUnits) {
+          if (unit.unitId != null) {
+            await _viewModel.saveProductUnit(
+              ProductUnitsCompanion.insert(
+                productId: productId,
+                unitId: unit.unitId!,
+                conversionFactor: unit.conversionFactor,
+                sellingPrice: drift.Value(unit.sellingPrice),
+                barcode: drift.Value(unit.barcode),
+                isDefault: drift.Value(unit.isDefault),
+                tenantId: 1,
+              ),
+            );
+            if (unit.isDefault) {
+              defaultUnitId = unit.unitId;
+            }
+          }
+        }
+
+        final pid = productId;
+        if (defaultUnitId != null && pid != null) {
+          await (_viewModel.database.update(
+            _viewModel.database.products,
+          )..where((t) => t.id.equals(pid))).write(
+            ProductsCompanion(
+              baseUnitId: drift.Value(defaultUnitId),
+              updatedAt: drift.Value(DateTime.now()),
+            ),
+          );
+        }
       }
 
       if (mounted) {
@@ -1041,6 +1136,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         ),
                       ),
                     ),
+
+                    _buildProductUnitsSection(),
                   ],
                 );
               },
@@ -1049,5 +1146,338 @@ class _AddItemScreenState extends State<AddItemScreen> {
         );
       },
     );
+  }
+
+  Widget _buildProductUnitsSection() {
+    return StreamBuilder<List<UnitEntity>>(
+      stream: _viewModel.database.select(_viewModel.database.units).watch(),
+      builder: (context, snapshot) {
+        final units = snapshot.data ?? [];
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(255, 252, 252, 252),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: () => setState(() => _unitsExpanded = !_unitsExpanded),
+                child: Row(
+                  children: [
+                    Icon(Icons.scale, color: PosColors.blue, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Product Units",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      _unitsExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: Colors.grey[400],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 32, color: PosColors.border),
+              _unitsExpanded
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_productUnits.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              "No units added. Add units to enable multi-unit pricing.",
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          )
+                        else
+                          ...List.generate(_productUnits.length, (index) {
+                            final entry = _productUnits[index];
+                            return _buildProductUnitRow(entry, index, units);
+                          }),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _addProductUnit(units),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text("Add Unit"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: PosColors.blue,
+                            side: const BorderSide(color: PosColors.blue),
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductUnitRow(
+    _ProductUnitEntry entry,
+    int index,
+    List<UnitEntity> allUnits,
+  ) {
+    final usedUnitIds = _productUnits.map((e) => e.unitId).toSet();
+    final availableUnits = allUnits
+        .where((u) => !usedUnitIds.contains(u.id) || u.id == entry.unitId)
+        .toList();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: PosColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<int>(
+                  value: entry.unitId,
+                  decoration: InputDecoration(
+                    labelText: "Unit",
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  items: availableUnits
+                      .map(
+                        (u) => DropdownMenuItem(
+                          value: u.id,
+                          child: Text("${u.name} (${u.symbol})"),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      entry.unitId = val;
+                      final u = allUnits.firstWhere((x) => x.id == val);
+                      entry.unitName = u.name;
+                      entry.unitSymbol = u.symbol;
+                      _suggestRelatedUnits(entry, allUnits);
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: entry.conversionFactor.toString(),
+                  decoration: InputDecoration(
+                    labelText: "Factor",
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) {
+                    entry.conversionFactor = double.tryParse(val) ?? 1.0;
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () {
+                  setState(() => _productUnits.removeAt(index));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  initialValue: entry.sellingPrice?.toString() ?? '',
+                  decoration: InputDecoration(
+                    labelText: "Selling Price",
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) {
+                    entry.sellingPrice = double.tryParse(val);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: entry.barcode ?? '',
+                  decoration: InputDecoration(
+                    labelText: "Barcode",
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  onChanged: (val) {
+                    entry.barcode = val.isEmpty ? null : val;
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                children: [
+                  const Text("Default"),
+                  Checkbox(
+                    value: entry.isDefault,
+                    onChanged: (val) {
+                      setState(() {
+                        for (var e in _productUnits) {
+                          e.isDefault = false;
+                        }
+                        entry.isDefault = true;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addProductUnit(List<UnitEntity> allUnits) {
+    final usedUnitIds = _productUnits
+        .map((e) => e.unitId)
+        .whereType<int>()
+        .toSet();
+    final availableUnits = allUnits
+        .where((u) => !usedUnitIds.contains(u.id))
+        .toList();
+
+    if (availableUnits.isEmpty) {
+      PosToast.showInfo(
+        context,
+        "No more units available. Add new units first.",
+      );
+      return;
+    }
+
+    setState(() {
+      final entry = _ProductUnitEntry(
+        unitId: availableUnits.first.id,
+        unitName: availableUnits.first.name,
+        unitSymbol: availableUnits.first.symbol,
+        conversionFactor: 1.0,
+        isDefault: _productUnits.isEmpty,
+      );
+      _productUnits.add(entry);
+      _suggestRelatedUnits(entry, allUnits);
+    });
+  }
+
+  void _suggestRelatedUnits(
+    _ProductUnitEntry entry,
+    List<UnitEntity> allUnits,
+  ) {
+    if (entry.unitName == null) return;
+
+    final unitLower = entry.unitName!.toLowerCase();
+    List<UnitEntity> relatedUnits = [];
+
+    if (unitLower.contains('gram') || unitLower == 'g') {
+      relatedUnits = allUnits
+          .where(
+            (u) =>
+                (u.name.toLowerCase().contains('kilogram') ||
+                    u.name.toLowerCase() == 'kg') &&
+                !_productUnits.any((e) => e.unitId == u.id),
+          )
+          .toList();
+    } else if (unitLower.contains('kilogram') || unitLower == 'kg') {
+      relatedUnits = allUnits
+          .where(
+            (u) =>
+                (u.name.toLowerCase().contains('gram') ||
+                    u.name.toLowerCase() == 'g') &&
+                !_productUnits.any((e) => e.unitId == u.id),
+          )
+          .toList();
+    } else if (unitLower.contains('piece') ||
+        unitLower == 'pc' ||
+        unitLower == 'piece') {
+      relatedUnits = allUnits
+          .where(
+            (u) =>
+                (u.name.toLowerCase().contains('packet') ||
+                    u.name.toLowerCase().contains('pack')) &&
+                !_productUnits.any((e) => e.unitId == u.id),
+          )
+          .toList();
+    } else if (unitLower.contains('packet') || unitLower.contains('pack')) {
+      relatedUnits = allUnits
+          .where(
+            (u) =>
+                (u.name.toLowerCase().contains('piece') ||
+                    u.name.toLowerCase() == 'pc') &&
+                !_productUnits.any((e) => e.unitId == u.id),
+          )
+          .toList();
+    }
+
+    if (relatedUnits.isNotEmpty && _productUnits.length == 1) {
+      final related = relatedUnits.first;
+      final conversionFactor =
+          (entry.unitName?.toLowerCase().contains('gram') ?? false)
+          ? 1000.0
+          : 30.0;
+      final basePrice =
+          entry.sellingPrice ?? double.tryParse(_priceController.text) ?? 0;
+
+      setState(() {
+        _productUnits.add(
+          _ProductUnitEntry(
+            unitId: related.id,
+            unitName: related.name,
+            unitSymbol: related.symbol,
+            conversionFactor: conversionFactor,
+            sellingPrice: basePrice > 0 ? basePrice : null,
+            isDefault: false,
+          ),
+        );
+      });
+    }
   }
 }

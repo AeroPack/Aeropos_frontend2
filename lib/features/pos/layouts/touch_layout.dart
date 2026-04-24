@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/category_chip.dart';
+import 'package:ezo/features/pos/widgets/quantity_with_unit_dialog.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/theme/app_theme.dart';
@@ -513,7 +514,7 @@ class _TouchLayoutState extends BasePosLayoutState<TouchLayout> {
                     vertical: 8,
                   ),
                   child: Text(
-                    '${item.quantity}',
+                    '${item.quantity}${item.selectedUnit?.unitSymbol != null ? ' ${item.selectedUnit!.unitSymbol}' : ''}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -537,7 +538,10 @@ class _TouchLayoutState extends BasePosLayoutState<TouchLayout> {
               const SizedBox(width: 8),
               _itemActionBtn(
                 Icons.delete_outline,
-                () => widget.cartNotifier.removeProduct(item.product),
+                () => widget.cartNotifier.removeProduct(
+                  item.product,
+                  selectedUnit: item.selectedUnit,
+                ),
                 isDestructive: true,
               ),
             ],
@@ -589,105 +593,22 @@ class _TouchLayoutState extends BasePosLayoutState<TouchLayout> {
   }
 
   void _showQuantityDialog(CartItem item) {
-    final controller = TextEditingController(text: '${item.quantity}');
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'SET QUANTITY',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1,
-            color: AppColors.primary,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              item.product.name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: [1, 2, 3, 5, 10].map((qty) {
-                return GestureDetector(
-                  onTap: () => controller.text = qty.toString(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: int.tryParse(controller.text) == qty
-                          ? AppColors.accent
-                          : AppColors.grey100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$qty',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: int.tryParse(controller.text) == qty
-                            ? Colors.white
-                            : AppColors.grey700,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'CANCEL',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: AppColors.grey400,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              final qty = double.tryParse(controller.text) ?? 1.0;
-              widget.cartNotifier.updateQuantity(item.product, qty);
-              Navigator.pop(ctx);
-            },
-            child: const Text(
-              'UPDATE',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
+      builder: (ctx) => QuantityWithUnitDialog(
+        product: item.product,
+        currentUnit: item.selectedUnit,
+        currentQuantity: item.quantity,
+        productUnits: const [],
+        onSave: (qty, unit) {
+          widget.cartNotifier.updateQuantity(
+            item.product,
+            qty,
+            selectedUnit: unit,
+            modifiers: item.modifiers,
+            course: item.course,
+          );
+        },
       ),
     );
   }
@@ -1463,7 +1384,7 @@ class _TouchLayoutState extends BasePosLayoutState<TouchLayout> {
   }
 
   void _addToCart(ProductEntity product) {
-    widget.cartNotifier.addProduct(product);
+    widget.onProductTap(product);
     setState(() {
       _recentItems.removeWhere((p) => p.id == product.id);
       _recentItems.insert(0, product);

@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/widgets/product_image.dart';
 import 'package:ezo/core/theme/app_theme.dart';
+import 'package:ezo/core/di/service_locator.dart';
+import 'package:drift/drift.dart' show OrderingTerm;
 
 enum PosCardSize { small, medium, large }
 
-/// Reusable product card for POS layouts.
-/// [size] controls the visual density.
-class PosProductCard extends StatelessWidget {
+class PosProductCard extends StatefulWidget {
   final ProductEntity product;
   final VoidCallback onTap;
   final PosCardSize size;
   final bool showImage;
   final bool showPrice;
   final bool showSku;
+  final bool showStock;
 
   const PosProductCard({
     super.key,
@@ -23,10 +24,73 @@ class PosProductCard extends StatelessWidget {
     this.showImage = true,
     this.showPrice = true,
     this.showSku = false,
+    this.showStock = true,
   });
 
+  @override
+  State<PosProductCard> createState() => _PosProductCardState();
+}
+
+class _PosProductCardState extends State<PosProductCard> {
+  List<ProductUnitEntity> _productUnits = [];
+  bool _unitsLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProductUnits();
+  }
+
+  Future<void> _loadProductUnits() async {
+    try {
+      final db = ServiceLocator.instance.database;
+      final units =
+          await (db.select(db.productUnits)
+                ..where((t) => t.productId.equals(widget.product.id))
+                ..orderBy([(t) => OrderingTerm.asc(t.conversionFactor)]))
+              .get();
+      if (mounted) {
+        setState(() {
+          _productUnits = units;
+          _unitsLoaded = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _unitsLoaded = true);
+      }
+    }
+  }
+
+  String _formatStock(num stock) {
+    if (stock >= 1000) {
+      return '${(stock / 1000).toStringAsFixed(1)} kg';
+    } else {
+      return '${stock.toInt()} g';
+    }
+  }
+
+  IconData _getUnitIcon(String? symbol) {
+    switch (symbol?.toLowerCase()) {
+      case 'kg':
+      case 'kilogram':
+        return Icons.scale;
+      case 'g':
+      case 'gram':
+        return Icons.scale_outlined;
+      case 'pkt':
+      case 'packet':
+        return Icons.inventory_2;
+      case 'pc':
+      case 'piece':
+        return Icons.crop_square;
+      default:
+        return Icons.straighten;
+    }
+  }
+
   double get _imageSize {
-    switch (size) {
+    switch (widget.size) {
       case PosCardSize.small:
         return 60;
       case PosCardSize.medium:
@@ -37,7 +101,7 @@ class PosProductCard extends StatelessWidget {
   }
 
   double get _titleSize {
-    switch (size) {
+    switch (widget.size) {
       case PosCardSize.small:
         return 11;
       case PosCardSize.medium:
@@ -48,7 +112,7 @@ class PosProductCard extends StatelessWidget {
   }
 
   double get _priceSize {
-    switch (size) {
+    switch (widget.size) {
       case PosCardSize.small:
         return 12;
       case PosCardSize.medium:
@@ -61,7 +125,7 @@ class PosProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
@@ -79,7 +143,7 @@ class PosProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (showImage)
+            if (widget.showImage)
               Expanded(
                 flex: 4,
                 child: Container(
@@ -94,7 +158,10 @@ class PosProductCard extends StatelessWidget {
                     child: SizedBox(
                       width: double.infinity,
                       height: double.infinity,
-                      child: ProductImage(product: product, size: _imageSize),
+                      child: ProductImage(
+                        product: widget.product,
+                        size: _imageSize,
+                      ),
                     ),
                   ),
                 ),
@@ -106,20 +173,20 @@ class PosProductCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    product.name,
+                    widget.product.name,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: _titleSize,
                       color: AppColors.text,
                     ),
-                    maxLines: size == PosCardSize.small ? 1 : 2,
+                    maxLines: widget.size == PosCardSize.small ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (showSku && product.sku != null)
+                  if (widget.showSku && widget.product.sku != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 1),
                       child: Text(
-                        'SKU: ${product.sku}',
+                        'SKU: ${widget.product.sku}',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w500,
@@ -129,15 +196,68 @@ class PosProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  if (showPrice)
+                  if (_unitsLoaded && _productUnits.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: _productUnits.map((pu) {
+                          final symbol = _getUnitSymbol(pu.unitId);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.grey100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getUnitIcon(symbol),
+                                  size: 10,
+                                  color: AppColors.grey600,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  symbol ?? '',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: AppColors.grey600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  if (widget.showPrice)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        'Rs ${product.price.toInt()}',
+                        'Rs ${widget.product.price.toInt()}',
                         style: TextStyle(
                           color: AppColors.accent,
                           fontWeight: FontWeight.w800,
                           fontSize: _priceSize,
+                        ),
+                      ),
+                    ),
+                  if (widget.showStock && widget.product.stockQuantity > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Stock: ${_formatStock(widget.product.stockQuantity)}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: widget.product.stockQuantity > 10
+                              ? Colors.green
+                              : Colors.orange,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -148,5 +268,10 @@ class PosProductCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String? _getUnitSymbol(int unitId) {
+    // This will be handled in the widget since we need async
+    return null;
   }
 }

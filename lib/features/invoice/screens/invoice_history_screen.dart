@@ -6,6 +6,10 @@ import 'package:ezo/features/invoice/state/invoice_history_state.dart';
 import 'package:ezo/features/invoice/screens/invoice_preview_screen.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/widgets/table_export_actions.dart';
+import 'package:ezo/features/pos/widgets/return_dialog.dart';
+import 'package:ezo/features/pos/widgets/delete_invoice_dialog.dart';
+import 'package:ezo/features/pos/widgets/invoice_audit_history_dialog.dart';
+import 'package:ezo/features/pos/widgets/invoice_status_badge.dart';
 
 class InvoiceHistoryScreen extends ConsumerStatefulWidget {
   const InvoiceHistoryScreen({super.key});
@@ -19,6 +23,18 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
   final _searchController = TextEditingController();
   DateTimeRange? _selectedDateRange;
   String _searchQuery = '';
+
+  String _calculateInvoiceStatus(List<InvoiceItemEntity> items) {
+    double soldQty = 0;
+    double returnedQty = 0;
+    for (final item in items) {
+      soldQty += item.quantity.toDouble();
+      returnedQty += item.returnedQuantity;
+    }
+    if (returnedQty == 0) return 'active';
+    if (returnedQty < soldQty) return 'partially_returned';
+    return 'fully_returned';
+  }
 
   @override
   void initState() {
@@ -259,14 +275,23 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
   Widget _buildExportActions() {
     final state = ref.read(salesHistoryProvider);
     final db = ServiceLocator.instance.database;
-    final exportHeaders = ['S.No', 'Invoice #', 'Date', 'Time', 'Product', 'Customer', 'Amount', 'Payment Method'];
+    final exportHeaders = [
+      'S.No',
+      'Invoice #',
+      'Date',
+      'Time',
+      'Product',
+      'Customer',
+      'Amount',
+      'Payment Method',
+    ];
     final exportRows = <List<String>>[];
 
     for (int i = 0; i < state.items.length; i++) {
       try {
         final res = state.items[i];
         final invoice = res.readTable(db.invoices);
-        final prod = res.readTable(db.products);
+        final prod = res.readTableOrNull(db.products);
         final cust = res.readTableOrNull(db.customers);
         final serialNumber = (state.page * state.limit) + i + 1;
         exportRows.add([
@@ -274,7 +299,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
           invoice.invoiceNumber,
           DateFormat('yyyy-MM-dd').format(invoice.date),
           DateFormat('HH:mm:ss').format(invoice.date),
-          prod.name,
+          prod?.name ?? 'Deleted Product',
           cust?.name ?? 'Walk-in',
           invoice.total.toStringAsFixed(2),
           invoice.paymentMethod ?? 'N/A',
@@ -421,7 +446,9 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
       final res = state.items[index];
       final invoice = res.readTable(ServiceLocator.instance.database.invoices);
       final item = res.readTable(ServiceLocator.instance.database.invoiceItems);
-      final prod = res.readTable(ServiceLocator.instance.database.products);
+      final prod = res.readTableOrNull(
+        ServiceLocator.instance.database.products,
+      );
       final cust = res.readTableOrNull(
         ServiceLocator.instance.database.customers,
       );
@@ -505,7 +532,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          prod.name,
+                          prod?.name ?? 'Deleted Product',
                           style: const TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 12,
@@ -596,7 +623,14 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
                 ),
                 Expanded(
                   flex: 1,
-                  child: Center(child: _viewPdfButton(invoice, cust, item)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _viewPdfButton(invoice, cust, item),
+                      const SizedBox(width: 4),
+                      _invoiceActions(invoice, item),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -639,6 +673,78 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _invoiceActions(InvoiceEntity invoice, InvoiceItemEntity invoiceItem) {
+    final isDeleted = invoice.isDeleted;
+
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      tooltip: 'More actions',
+      onSelected: (value) async {
+        switch (value) {
+          case 'return':
+            await showDialog(
+              context: context,
+              builder: (_) =>
+                  ReturnDialog(invoice: invoice, items: [invoiceItem]),
+            );
+            ref.read(salesHistoryProvider.notifier).refresh();
+            break;
+          case 'delete':
+            await showDialog(
+              context: context,
+              builder: (_) => DeleteInvoiceDialog(
+                invoiceId: invoice.id,
+                tenantId: invoice.tenantId,
+              ),
+            );
+            ref.read(salesHistoryProvider.notifier).refresh();
+            break;
+          case 'history':
+            showDialog(
+              context: context,
+              builder: (_) => InvoiceAuditHistoryDialog(invoiceId: invoice.id),
+            );
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'return',
+          enabled: !isDeleted,
+          child: const Row(
+            children: [
+              Icon(Icons.assignment_return, size: 18),
+              SizedBox(width: 8),
+              Text('Return/Exchange'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          enabled: !isDeleted,
+          child: const Row(
+            children: [
+              Icon(Icons.delete_forever, size: 18, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Delete', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'history',
+          child: Row(
+            children: [
+              Icon(Icons.history, size: 18),
+              SizedBox(width: 8),
+              Text('View History'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -865,7 +971,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            prod.name,
+                            prod?.name ?? 'Deleted Product',
                             style: const TextStyle(
                               fontWeight: FontWeight.w500,
                               fontSize: 13,
@@ -1090,10 +1196,7 @@ class _DateRangePickerDialog extends StatefulWidget {
   final DateTimeRange? initialRange;
   final bool isMobile;
 
-  const _DateRangePickerDialog({
-    this.initialRange,
-    this.isMobile = false,
-  });
+  const _DateRangePickerDialog({this.initialRange, this.isMobile = false});
 
   @override
   State<_DateRangePickerDialog> createState() => _DateRangePickerDialogState();
@@ -1167,7 +1270,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final dialogWidth = widget.isMobile ? MediaQuery.of(context).size.width * 0.92 : 420.0;
+    final dialogWidth = widget.isMobile
+        ? MediaQuery.of(context).size.width * 0.92
+        : 420.0;
 
     final presets = [
       ('Today', today, now),
@@ -1217,10 +1322,16 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                 const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF717786)),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 20,
+                    color: Color(0xFF717786),
+                  ),
                   style: IconButton.styleFrom(
                     backgroundColor: const Color(0xFFF1F5F9),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ],
@@ -1248,12 +1359,19 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                   borderRadius: BorderRadius.circular(10),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isActive ? const Color(0xFF0058BC) : const Color(0xFFF1F5F9),
+                      color: isActive
+                          ? const Color(0xFF0058BC)
+                          : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isActive ? const Color(0xFF0058BC) : const Color(0xFFE2E8F0),
+                        color: isActive
+                            ? const Color(0xFF0058BC)
+                            : const Color(0xFFE2E8F0),
                       ),
                     ),
                     child: Text(
@@ -1261,7 +1379,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.white : const Color(0xFF545F73),
+                        color: isActive
+                            ? Colors.white
+                            : const Color(0xFF545F73),
                       ),
                     ),
                   ),
@@ -1293,11 +1413,27 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
             // Custom Date Fields
             Row(
               children: [
-                Expanded(child: _dateField('From', _startDate, () => _pickDate(isStart: true))),
+                Expanded(
+                  child: _dateField(
+                    'From',
+                    _startDate,
+                    () => _pickDate(isStart: true),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF717786)),
+                const Icon(
+                  Icons.arrow_forward,
+                  size: 16,
+                  color: Color(0xFF717786),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _dateField('To', _endDate, () => _pickDate(isStart: false))),
+                Expanded(
+                  child: _dateField(
+                    'To',
+                    _endDate,
+                    () => _pickDate(isStart: false),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -1317,10 +1453,15 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF545F73),
                       side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1341,10 +1482,15 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                       disabledBackgroundColor: const Color(0xFFE2E8F0),
                       disabledForegroundColor: const Color(0xFF717786),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Apply Range', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: const Text(
+                      'Apply Range',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],
@@ -1356,7 +1502,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
   }
 
   Widget _dateField(String label, DateTime? date, VoidCallback onTap) {
-    final formatted = date != null ? DateFormat('MMM dd, yyyy').format(date) : 'Select';
+    final formatted = date != null
+        ? DateFormat('MMM dd, yyyy').format(date)
+        : 'Select';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -1366,7 +1514,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
           color: const Color(0xFFF8F9FF),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: date != null ? const Color(0xFF0058BC).withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
+            color: date != null
+                ? const Color(0xFF0058BC).withValues(alpha: 0.3)
+                : const Color(0xFFE2E8F0),
           ),
         ),
         child: Column(
@@ -1387,7 +1537,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                 Icon(
                   Icons.calendar_today_outlined,
                   size: 14,
-                  color: date != null ? const Color(0xFF0058BC) : const Color(0xFF717786),
+                  color: date != null
+                      ? const Color(0xFF0058BC)
+                      : const Color(0xFF717786),
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -1395,7 +1547,9 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: date != null ? const Color(0xFF0B1C30) : const Color(0xFFC1C6D7),
+                    color: date != null
+                        ? const Color(0xFF0B1C30)
+                        : const Color(0xFFC1C6D7),
                   ),
                 ),
               ],

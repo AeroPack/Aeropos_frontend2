@@ -117,10 +117,12 @@ class InvoiceTemplateEditorScreen extends ConsumerStatefulWidget {
   const InvoiceTemplateEditorScreen({super.key});
 
   @override
-  ConsumerState<InvoiceTemplateEditorScreen> createState() => _InvoiceTemplateEditorScreenState();
+  ConsumerState<InvoiceTemplateEditorScreen> createState() =>
+      _InvoiceTemplateEditorScreenState();
 }
 
-class _InvoiceTemplateEditorScreenState extends ConsumerState<InvoiceTemplateEditorScreen> {
+class _InvoiceTemplateEditorScreenState
+    extends ConsumerState<InvoiceTemplateEditorScreen> {
   String activeFormat = 'Thermal Receipt';
   String activeIndustry = 'All Industries';
 
@@ -336,14 +338,19 @@ class _InvoiceTemplateEditorScreenState extends ConsumerState<InvoiceTemplateEdi
 
   List<EditorTemplate> get filteredTemplates {
     return templates.where((t) {
-      final formatMatch = activeFormat == 'All Formats' || // Fallback if added
-          (activeFormat == 'Thermal Receipt' && t.format == EditorTemplateFormat.thermal) ||
-          (activeFormat == 'A5 Half-Page' && t.format == EditorTemplateFormat.a5) ||
-          (activeFormat == 'A4 Full-Page' && t.format == EditorTemplateFormat.a4);
-      
-      final industryMatch = activeIndustry == 'All Industries' || 
+      final formatMatch =
+          activeFormat == 'All Formats' || // Fallback if added
+          (activeFormat == 'Thermal Receipt' &&
+              t.format == EditorTemplateFormat.thermal) ||
+          (activeFormat == 'A5 Half-Page' &&
+              t.format == EditorTemplateFormat.a5) ||
+          (activeFormat == 'A4 Full-Page' &&
+              t.format == EditorTemplateFormat.a4);
+
+      final industryMatch =
+          activeIndustry == 'All Industries' ||
           t.industry.toLowerCase() == activeIndustry.toLowerCase();
-          
+
       return formatMatch && industryMatch;
     }).toList();
   }
@@ -358,7 +365,10 @@ class _InvoiceTemplateEditorScreenState extends ConsumerState<InvoiceTemplateEdi
             children: [
               Icon(LucideIcons.searchX, size: 48, color: Colors.grey[400]),
               const SizedBox(height: 16),
-              Text('No templates found for this criteria', style: TextStyle(color: Colors.grey[600])),
+              Text(
+                'No templates found for this criteria',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
@@ -384,7 +394,8 @@ class _InvoiceTemplateEditorScreenState extends ConsumerState<InvoiceTemplateEdi
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => InvoiceDesignEditorScreen(template: t),
+                    builder: (context) =>
+                        InvoiceDesignEditorScreen(template: t),
                   ),
                 ),
                 child: Container(
@@ -458,7 +469,11 @@ class _InvoiceTemplateEditorScreenState extends ConsumerState<InvoiceTemplateEdi
             const SizedBox(height: 12),
             Text(
               t.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF1E293B),
+              ),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -491,10 +506,12 @@ class InvoiceDesignEditorScreen extends ConsumerStatefulWidget {
   const InvoiceDesignEditorScreen({super.key, required this.template});
 
   @override
-  ConsumerState<InvoiceDesignEditorScreen> createState() => _InvoiceDesignEditorScreenState();
+  ConsumerState<InvoiceDesignEditorScreen> createState() =>
+      _InvoiceDesignEditorScreenState();
 }
 
-class _InvoiceDesignEditorScreenState extends ConsumerState<InvoiceDesignEditorScreen> {
+class _InvoiceDesignEditorScreenState
+    extends ConsumerState<InvoiceDesignEditorScreen> {
   late String businessName;
   late List<EditorInvoiceItem> items;
   String themeColor = '#4F46E5';
@@ -538,12 +555,20 @@ class _InvoiceDesignEditorScreenState extends ConsumerState<InvoiceDesignEditorS
       backgroundColor: Colors.white,
       elevation: 1,
       leading: IconButton(
-        icon: const Icon(LucideIcons.arrowLeft, size: 18, color: Color(0xFF1E293B)),
+        icon: const Icon(
+          LucideIcons.arrowLeft,
+          size: 18,
+          color: Color(0xFF1E293B),
+        ),
         onPressed: () => Navigator.pop(context),
       ),
       title: Text(
         widget.template.name,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF1E293B),
+        ),
       ),
       actions: [
         _buildActionBtn(
@@ -582,7 +607,13 @@ class _InvoiceDesignEditorScreenState extends ConsumerState<InvoiceDesignEditorS
     );
   }
 
-  Widget _buildActionBtn(String label, IconData icon, Color bg, Color text, {VoidCallback? onPressed}) {
+  Widget _buildActionBtn(
+    String label,
+    IconData icon,
+    Color bg,
+    Color text, {
+    VoidCallback? onPressed,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: TextButton.icon(

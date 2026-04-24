@@ -124,7 +124,6 @@ class _AppShellState extends ConsumerState<AppShell> {
         ),
       ],
     ),
-
     // ── Sales ────────────────────────────────────────────────────────────────
     SidebarGroup(
       label: 'Sales',
@@ -166,6 +165,42 @@ class _AppShellState extends ConsumerState<AppShell> {
       label: 'POS Billing',
       icon: Icons.monitor_outlined,
       routePush: '/pos',
+    ),
+
+    // ── Stock Management ────────────────────────────────────────────────────
+    SidebarGroup(
+      label: 'Stock Management',
+      icon: Icons.inventory_outlined,
+      children: [
+        SidebarItem(
+          label: 'Inventory Dashboard',
+          icon: Icons.dashboard_outlined,
+          branchIndex: 16,
+        ),
+        SidebarItem(
+          label: 'Purchase Receipt',
+          icon: Icons.shopping_cart_outlined,
+          branchIndex: 17,
+        ),
+      ],
+    ),
+
+    // ── Ledger ───────────────────────────────────────────────────────────────
+    SidebarGroup(
+      label: 'Ledger',
+      icon: Icons.account_balance_outlined,
+      children: [
+        SidebarItem(
+          label: 'Customer Ledger',
+          icon: Icons.people_outline,
+          branchIndex: 18,
+        ),
+        SidebarItem(
+          label: 'Supplier Ledger',
+          icon: Icons.local_shipping_outlined,
+          branchIndex: 19,
+        ),
+      ],
     ),
 
     // ── Settings ─────────────────────────────────────────────────────────────

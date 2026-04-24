@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,8 +12,6 @@ import 'package:excel/excel.dart' as xl;
 import 'package:http/http.dart' as http;
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/profile/presentation/providers/profile_controller.dart';
-import 'package:web/web.dart' as web;
-import 'dart:js_interop';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TableExportActions — Reusable PDF / Excel / Print widget for any data table
@@ -113,17 +113,9 @@ class TableExportActions extends ConsumerWidget {
       final pdfBytes = await _generatePdfDocument(company);
 
       if (kIsWeb) {
-        final blob = web.Blob(
-          [pdfBytes.toJS].toJS,
-          web.BlobPropertyBag(type: 'application/pdf'),
-        );
-        final url = web.URL.createObjectURL(blob);
-        final fileName = '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.pdf';
-        final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
-        anchor.href = url;
-        anchor.download = fileName;
-        anchor.click();
-        web.URL.revokeObjectURL(url);
+        await _downloadPdfWeb(pdfBytes);
+      } else {
+        await _savePdfDesktop(context, pdfBytes);
       }
 
       if (context.mounted) {
@@ -134,6 +126,81 @@ class TableExportActions extends ConsumerWidget {
         _showSnackBar(context, 'PDF export failed: $e', Colors.red);
       }
     }
+  }
+
+  Future<void> _savePdfDesktop(BuildContext context, Uint8List pdfBytes) async {
+    try {
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save PDF',
+        fileName:
+            '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.pdf',
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      if (result != null) {
+        final file = File(result);
+        await file.writeAsBytes(pdfBytes);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _downloadPdfWeb(Uint8List pdfBytes) async {
+    try {
+      final web = await _loadWebLibrary();
+      final blob = web.Blob([
+        pdfBytes,
+      ], web.BlobPropertyBag(type: 'application/pdf'));
+      final url = web.URL.createObjectURL(blob);
+      final fileName =
+          '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.pdf';
+      final anchor = web.document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      web.URL.revokeObjectURL(url);
+    } catch (_) {}
+  }
+
+  Future<dynamic> _loadWebLibrary() async {
+    throw UnimplementedError('Web only');
+  }
+
+  Future<void> _downloadExcelWeb(Uint8List bytes) async {
+    try {
+      // ignore: avoid_dynamic_calls
+      final web = await _loadWebLibrary();
+      final blob = web.Blob(
+        [bytes],
+        web.BlobPropertyBag(
+          type:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+      );
+      final url = web.URL.createObjectURL(blob);
+      final fileName =
+          '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.xlsx';
+      final anchor = web.document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      web.URL.revokeObjectURL(url);
+    } catch (_) {}
+  }
+
+  Future<void> _saveExcelDesktop(BuildContext context, Uint8List bytes) async {
+    try {
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Excel',
+        fileName:
+            '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+      );
+      if (result != null) {
+        final file = File(result);
+        await file.writeAsBytes(bytes);
+      }
+    } catch (_) {}
   }
 
   Future<Uint8List> _generatePdfDocument(_CompanyInfo company) async {
@@ -163,10 +230,12 @@ class TableExportActions extends ConsumerWidget {
     const rowsPerPage = 30;
     final chunks = <List<List<String>>>[];
     for (var i = 0; i < dataRows.length; i += rowsPerPage) {
-      chunks.add(dataRows.sublist(
-        i,
-        i + rowsPerPage > dataRows.length ? dataRows.length : i + rowsPerPage,
-      ));
+      chunks.add(
+        dataRows.sublist(
+          i,
+          i + rowsPerPage > dataRows.length ? dataRows.length : i + rowsPerPage,
+        ),
+      );
     }
 
     final now = DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now());
@@ -207,12 +276,22 @@ class TableExportActions extends ConsumerWidget {
                           if (company.address.isNotEmpty)
                             pw.Text(
                               company.address,
-                              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                              style: const pw.TextStyle(
+                                fontSize: 9,
+                                color: PdfColors.grey700,
+                              ),
                             ),
-                          if (company.phone.isNotEmpty || company.email.isNotEmpty)
+                          if (company.phone.isNotEmpty ||
+                              company.email.isNotEmpty)
                             pw.Text(
-                              [company.phone, company.email].where((e) => e.isNotEmpty).join(' | '),
-                              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                              [
+                                company.phone,
+                                company.email,
+                              ].where((e) => e.isNotEmpty).join(' | '),
+                              style: const pw.TextStyle(
+                                fontSize: 9,
+                                color: PdfColors.grey700,
+                              ),
                             ),
                         ],
                       ),
@@ -222,15 +301,24 @@ class TableExportActions extends ConsumerWidget {
                       children: [
                         pw.Text(
                           title,
-                          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
                         ),
                         pw.Text(
                           'Generated: $now',
-                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                          style: const pw.TextStyle(
+                            fontSize: 8,
+                            color: PdfColors.grey600,
+                          ),
                         ),
                         pw.Text(
                           'Page ${pageIdx + 1} of ${chunks.length}',
-                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                          style: const pw.TextStyle(
+                            fontSize: 8,
+                            color: PdfColors.grey600,
+                          ),
                         ),
                       ],
                     ),
@@ -258,8 +346,14 @@ class TableExportActions extends ConsumerWidget {
                     for (int i = 0; i < headers.length; i++)
                       i: pw.Alignment.centerLeft,
                   },
-                  cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+                  cellPadding: const pw.EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  border: pw.TableBorder.all(
+                    color: PdfColors.grey300,
+                    width: 0.5,
+                  ),
                   oddRowDecoration: const pw.BoxDecoration(
                     color: PdfColor.fromInt(0xFFF8F9FF),
                   ),
@@ -276,22 +370,38 @@ class TableExportActions extends ConsumerWidget {
                   children: [
                     pw.Text(
                       company.name,
-                      style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600),
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey600,
+                      ),
                     ),
                     pw.Text(
                       '${dataRows.length} total records',
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+                      style: const pw.TextStyle(
+                        fontSize: 8,
+                        color: PdfColors.grey500,
+                      ),
                     ),
                     pw.Text(
-                      [company.phone, company.email].where((e) => e.isNotEmpty).join(' | '),
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+                      [
+                        company.phone,
+                        company.email,
+                      ].where((e) => e.isNotEmpty).join(' | '),
+                      style: const pw.TextStyle(
+                        fontSize: 8,
+                        color: PdfColors.grey500,
+                      ),
                     ),
                   ],
                 ),
                 if (company.taxId.isNotEmpty)
                   pw.Text(
                     'Tax ID: ${company.taxId}',
-                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey500),
+                    style: const pw.TextStyle(
+                      fontSize: 7,
+                      color: PdfColors.grey500,
+                    ),
                   ),
               ],
             );
@@ -346,7 +456,10 @@ class TableExportActions extends ConsumerWidget {
           ..cellStyle = subHeaderStyle;
       }
 
-      final contactLine = [company.phone, company.email].where((e) => e.isNotEmpty).join(' | ');
+      final contactLine = [
+        company.phone,
+        company.email,
+      ].where((e) => e.isNotEmpty).join(' | ');
       if (contactLine.isNotEmpty) {
         sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2))
           ..value = xl.TextCellValue(contactLine)
@@ -357,13 +470,15 @@ class TableExportActions extends ConsumerWidget {
       sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4))
         ..value = xl.TextCellValue(title)
         ..cellStyle = xl.CellStyle(
-            bold: true,
-            fontSize: 12,
-            fontColorHex: xl.ExcelColor.fromHexString('#0058BC'),
-          );
+          bold: true,
+          fontSize: 12,
+          fontColorHex: xl.ExcelColor.fromHexString('#0058BC'),
+        );
 
       sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 5))
-        ..value = xl.TextCellValue('Generated: ${DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())}')
+        ..value = xl.TextCellValue(
+          'Generated: ${DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())}',
+        )
         ..cellStyle = subHeaderStyle;
 
       // ── Column Headers (Row 7) ────────────────────────────────────────
@@ -376,7 +491,12 @@ class TableExportActions extends ConsumerWidget {
       );
 
       for (int i = 0; i < headers.length; i++) {
-        sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: headerRowIndex))
+        sheet.cell(
+            xl.CellIndex.indexByColumnRow(
+              columnIndex: i,
+              rowIndex: headerRowIndex,
+            ),
+          )
           ..value = xl.TextCellValue(headers[i])
           ..cellStyle = colHeaderStyle;
       }
@@ -392,10 +512,12 @@ class TableExportActions extends ConsumerWidget {
         final row = dataRows[rowIdx];
         final style = rowIdx.isEven ? dataStyle : altDataStyle;
         for (int colIdx = 0; colIdx < row.length; colIdx++) {
-          sheet.cell(xl.CellIndex.indexByColumnRow(
-            columnIndex: colIdx,
-            rowIndex: headerRowIndex + 1 + rowIdx,
-          ))
+          sheet.cell(
+              xl.CellIndex.indexByColumnRow(
+                columnIndex: colIdx,
+                rowIndex: headerRowIndex + 1 + rowIdx,
+              ),
+            )
             ..value = xl.TextCellValue(row[colIdx])
             ..cellStyle = style;
         }
@@ -403,7 +525,9 @@ class TableExportActions extends ConsumerWidget {
 
       // ── Footer row ────────────────────────────────────────────────────
       final footerRow = headerRowIndex + 1 + dataRows.length + 1;
-      sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: footerRow))
+      sheet.cell(
+          xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: footerRow),
+        )
         ..value = xl.TextCellValue('Total Records: ${dataRows.length}')
         ..cellStyle = xl.CellStyle(bold: true, fontSize: 10);
 
@@ -422,23 +546,19 @@ class TableExportActions extends ConsumerWidget {
       final bytes = excel.save();
       if (bytes == null) throw Exception('Failed to generate Excel file');
 
+      final uint8Bytes = Uint8List.fromList(bytes);
+
       if (kIsWeb) {
-        final uint8Bytes = Uint8List.fromList(bytes);
-        final blob = web.Blob(
-          [uint8Bytes.toJS].toJS,
-          web.BlobPropertyBag(type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-        );
-        final url = web.URL.createObjectURL(blob);
-        final fileName = '${title.toLowerCase().replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now())}.xlsx';
-        final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
-        anchor.href = url;
-        anchor.download = fileName;
-        anchor.click();
-        web.URL.revokeObjectURL(url);
+        await _downloadExcelWeb(uint8Bytes);
+      } else {
+        await _saveExcelDesktop(context, uint8Bytes);
       }
 
       if (context.mounted) {
-        _showSuccessSnackBar(context, 'Excel exported (${dataRows.length} records)');
+        _showSuccessSnackBar(
+          context,
+          'Excel exported (${dataRows.length} records)',
+        );
       }
     } catch (e) {
       if (context.mounted) {

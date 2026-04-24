@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/features/pos/layouts/base_pos_layout.dart';
 import 'package:ezo/features/pos/widgets/common/product_card.dart';
 import 'package:ezo/features/pos/widgets/common/totals_display.dart';
+import 'package:ezo/features/pos/widgets/quantity_with_unit_dialog.dart';
 import 'package:ezo/features/pos/state/cart_state.dart';
 import 'package:ezo/core/theme/app_theme.dart';
 import 'package:ezo/core/database/app_database.dart';
@@ -460,7 +461,7 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
   }
 
   void _addToCart(ProductEntity product) {
-    widget.cartNotifier.addProduct(product);
+    widget.onProductTap(product);
     setState(() {
       _recentItems.removeWhere((p) => p.id == product.id);
       _recentItems.insert(0, product);
@@ -468,14 +469,6 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
         _recentItems.removeLast();
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${product.name} added'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 2000),
-      ),
-    );
   }
 
   Widget _buildCustomerSection() {
@@ -909,7 +902,7 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
                     vertical: 6,
                   ),
                   child: Text(
-                    '${item.quantity}',
+                    '${item.quantity}${item.selectedUnit?.unitSymbol != null ? ' ${item.selectedUnit!.unitSymbol}' : ''}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
@@ -934,7 +927,10 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
               _iconBtn(
                 Icons.delete_outline,
                 'Remove',
-                () => widget.cartNotifier.removeProduct(item.product),
+                () => widget.cartNotifier.removeProduct(
+                  item.product,
+                  selectedUnit: item.selectedUnit,
+                ),
                 isDestructive: true,
               ),
             ],
@@ -984,114 +980,22 @@ class _RestaurantLayoutState extends BasePosLayoutState<RestaurantLayout> {
   }
 
   void _showQuantityDialog(CartItem item) {
-    final controller = TextEditingController(text: '${item.quantity}');
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'SET QUANTITY',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              item.product.name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [1, 2, 3, 5, 10].map((qty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: InkWell(
-                    onTap: () => controller.text = qty.toString(),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: int.tryParse(controller.text) == qty
-                            ? AppColors.accent
-                            : AppColors.grey100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$qty',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: int.tryParse(controller.text) == qty
-                              ? Colors.white
-                              : AppColors.grey700,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
-              autofocus: true,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'CANCEL',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: AppColors.grey400,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              final qty = double.tryParse(controller.text) ?? 1.0;
-              widget.cartNotifier.updateQuantity(item.product, qty);
-              Navigator.pop(ctx);
-            },
-            child: const Text(
-              'UPDATE',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
+      builder: (ctx) => QuantityWithUnitDialog(
+        product: item.product,
+        currentUnit: item.selectedUnit,
+        currentQuantity: item.quantity,
+        productUnits: const [],
+        onSave: (qty, unit) {
+          widget.cartNotifier.updateQuantity(
+            item.product,
+            qty,
+            selectedUnit: unit,
+            modifiers: item.modifiers,
+            course: item.course,
+          );
+        },
       ),
     );
   }

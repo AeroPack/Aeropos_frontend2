@@ -5,6 +5,7 @@ import 'package:ezo/core/layout/pos_design_system.dart';
 import 'package:ezo/core/widgets/customer_form_dialog.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:drift/drift.dart' as drift;
+import 'package:ezo/features/customers/widgets/bulk_import_dialog.dart';
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key});
@@ -22,7 +23,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {
@@ -148,8 +148,15 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                                   customer: filteredData[index],
                                                 ),
                                                 onDelete: () =>
-                                                    _viewModel.deleteCustomer(
-                                                      filteredData[index].id,
+                                                    _showDeleteConfirmationDialog(
+                                                      context,
+                                                      'Delete Customer',
+                                                      'Are you sure you want to delete this customer? This action cannot be undone.',
+                                                      () => _viewModel
+                                                          .deleteCustomer(
+                                                            filteredData[index]
+                                                                .id,
+                                                          ),
                                                     ),
                                               );
                                             },
@@ -183,6 +190,13 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           Colors.blue.shade50,
           Colors.blue.shade700,
           onTap: _isSyncing ? null : _handleSync,
+        ),
+        const SizedBox(width: 8),
+        _headerIconButton(
+          Icons.upload_file,
+          Colors.green.shade50,
+          Colors.green.shade700,
+          onTap: () => showCustomerBulkImportDialog(context),
         ),
         const SizedBox(width: 8),
         if (showAddButton)
@@ -471,6 +485,38 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       ),
     );
   }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CustomerTableRow extends StatelessWidget {
@@ -551,14 +597,14 @@ class _CustomerTableRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "\$${customer.currentBalance.toStringAsFixed(2)}",
+                  "Rs ${customer.currentBalance.toStringAsFixed(2)}",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
                 ),
                 Text(
-                  "Limit: \$${customer.creditLimit.toStringAsFixed(0)}",
+                  "Limit: Rs ${customer.creditLimit.toStringAsFixed(0)}",
                   style: const TextStyle(
                     fontSize: 11,
                     color: PosColors.textLight,
@@ -605,6 +651,38 @@ class _CustomerTableRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(icon, size: 14, color: color),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onConfirm();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

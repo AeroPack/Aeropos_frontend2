@@ -20,7 +20,6 @@ class _BrandListScreenState extends State<BrandListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
   }
 
   void _handleSync() async {

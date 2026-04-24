@@ -3,6 +3,7 @@ import '../database/app_database.dart';
 import '../models/product.dart';
 import '../models/enums/sync_status.dart';
 import '../di/service_locator.dart';
+import 'sync_repository.dart';
 
 class ProductRepository {
   final AppDatabase db;
@@ -30,40 +31,75 @@ class ProductRepository {
   }
 
   Future<int> createProduct(Product product) async {
-    final companion = _mapToCompanion(
-      product,
-    ).copyWith(syncStatus: Value(SyncStatus.pending.value));
-    final id = await db.into(db.products).insert(companion);
-    // Trigger sync
-    ServiceLocator.instance.syncService.sync();
-    return id;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+
+    return await db.transaction(() async {
+      final companion = _mapToCompanion(product);
+      final id = await db.into(db.products).insert(companion);
+
+      await syncRepo.logOperation(
+        entity: 'products',
+        entityId: product.uuid,
+        opType: SyncOpType.insert,
+        data: product.toJson(),
+      );
+
+      return id;
+    });
   }
 
   Future<bool> updateProduct(Product product) async {
-    final companion = _mapToCompanion(product).copyWith(
-      syncStatus: Value(SyncStatus.pending.value),
-      updatedAt: Value(DateTime.now()),
-    );
-    final success = await db.update(db.products).replace(companion);
-    if (success) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return success;
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    return await db.transaction(() async {
+      final companion = _mapToCompanion(
+        product,
+      ).copyWith(updatedAt: Value(now));
+      final success = await db.update(db.products).replace(companion);
+
+      if (success) {
+        await syncRepo.logOperation(
+          entity: 'products',
+          entityId: product.uuid,
+          opType: SyncOpType.update,
+          data: product.toJson(),
+        );
+      }
+
+      return success;
+    });
   }
 
   Future<int> deleteProduct(int id) async {
-    final result = await (db.update(db.products)..where((t) => t.id.equals(id)))
-        .write(
-          ProductsCompanion(
-            isDeleted: const Value(true),
-            syncStatus: Value(SyncStatus.pending.value),
-            updatedAt: Value(DateTime.now()),
-          ),
+    final syncRepo = ServiceLocator.instance.syncRepository;
+    final now = DateTime.now();
+
+    final entity = await (db.select(
+      db.products,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (entity == null) return 0;
+
+    return await db.transaction(() async {
+      final result =
+          await (db.update(db.products)..where((t) => t.id.equals(id))).write(
+            ProductsCompanion(
+              isDeleted: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
+
+      if (result > 0) {
+        await syncRepo.logOperation(
+          entity: 'products',
+          entityId: entity.uuid,
+          opType: SyncOpType.delete,
+          data: entity.toJson(),
         );
-    if (result > 0) {
-      ServiceLocator.instance.syncService.sync();
-    }
-    return result;
+      }
+
+      return result;
+    });
   }
 
   Stream<List<Product>> watchProductsByCategory(int categoryId) {

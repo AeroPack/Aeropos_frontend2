@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -14,8 +17,10 @@ class AuthState {
   final String? errorMessage;
   final User? user;
   final Company? company; // Currently active company
-  final List<Company>? companies; // For company selection or "My Companies" list
-  final String? pendingEmail; // Email used for login (needed to retry with companyId)
+  final List<Company>?
+  companies; // For company selection or "My Companies" list
+  final String?
+  pendingEmail; // Email used for login (needed to retry with companyId)
   final String? pendingPassword; // Password used for login
   final String? pendingGoogleIdToken; // For Google login retry
   final String? pendingGoogleAccessToken; // For Google login retry
@@ -44,15 +49,14 @@ class AuthState {
     String? password,
     String? googleIdToken,
     String? googleAccessToken,
-  }) =>
-      AuthState(
-        status: AuthStatus.companySelection,
-        companies: companies,
-        pendingEmail: email,
-        pendingPassword: password,
-        pendingGoogleIdToken: googleIdToken,
-        pendingGoogleAccessToken: googleAccessToken,
-      );
+  }) => AuthState(
+    status: AuthStatus.companySelection,
+    companies: companies,
+    pendingEmail: email,
+    pendingPassword: password,
+    pendingGoogleIdToken: googleIdToken,
+    pendingGoogleAccessToken: googleAccessToken,
+  );
 
   AuthState copyWith({
     AuthStatus? status,
@@ -84,14 +88,30 @@ class AuthController extends StateNotifier<AuthState> {
   final AuthRepository _authRepository;
   final SyncService _syncService;
 
-  AuthController(this._authRepository, this._syncService)
-    : super(AuthState.initial()) {
+AuthController(this._authRepository, this._syncService)
+      : super(AuthState.initial()) {
     checkAuthStatus();
+  }
+
+  Map<String, dynamic> _decodeJwt(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) throw Exception('Invalid JWT');
+    final payload = parts[1];
+    final normalized = base64Url.normalize(payload);
+    final decoded = utf8.decode(base64Url.decode(normalized));
+    return jsonDecode(decoded);
   }
 
   Future<void> checkAuthStatus() async {
     state = AuthState.loading();
     try {
+      // ✅ Check token locally first — avoid HTTP call if clearly not logged in
+      final token = await ServiceLocator.instance.secureStorage.read(key: 'auth_token');
+      if (token == null) {
+        state = AuthState.unauthenticated();
+        return; // Skip API call entirely
+      }
+
       final isLoggedIn = await _authRepository.checkAuthStatus();
       if (isLoggedIn) {
         await _completeLogin();
@@ -99,7 +119,9 @@ class AuthController extends StateNotifier<AuthState> {
         state = AuthState.unauthenticated();
       }
     } catch (e) {
-      state = AuthState.unauthenticated(_extractErrorMessage(e, "Check authentication failed"));
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Check authentication failed"),
+      );
     }
   }
 
@@ -124,7 +146,9 @@ class AuthController extends StateNotifier<AuthState> {
       // Single company — proceed with login
       await _completeLogin();
     } catch (e) {
-      state = AuthState.unauthenticated(_extractErrorMessage(e, "Login failed"));
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Login failed"),
+      );
     }
   }
 
@@ -161,10 +185,19 @@ class AuthController extends StateNotifier<AuthState> {
 
   /// Switch to a different company (in-app, already authenticated)
   Future<void> switchCompany(int companyId) async {
+    print(
+      'DEBUG switchCompany: CALLED with companyId=$companyId (current tenantId=${ServiceLocator.instance.tenantService.tenantId})',
+    );
     state = AuthState.loading();
     try {
       await _authRepository.switchCompany(companyId);
+      print(
+        'DEBUG switchCompany: AFTER switchCompany API, calling setTenantId($companyId)',
+      );
       await ServiceLocator.instance.tenantService.setTenantId(companyId);
+      print(
+        'DEBUG switchCompany: AFTER setTenantId, tenantId=${ServiceLocator.instance.tenantService.tenantId}',
+      );
 
       // Clear local data and re-sync for the new company
       final database = ServiceLocator.instance.database;
@@ -232,7 +265,9 @@ class AuthController extends StateNotifier<AuthState> {
       await _authRepository.signup(data);
       await _completeLogin();
     } catch (e) {
-      state = AuthState.unauthenticated(_extractErrorMessage(e, "Signup failed"));
+      state = AuthState.unauthenticated(
+        _extractErrorMessage(e, "Signup failed"),
+      );
     }
   }
 
@@ -250,7 +285,6 @@ class AuthController extends StateNotifier<AuthState> {
         state = AuthState.unauthenticated();
         return;
       }
-
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -354,25 +388,66 @@ class AuthController extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
-        errorMessage: _extractErrorMessage(e, "Verification failed. The link may be expired or invalid."),
+        errorMessage: _extractErrorMessage(
+          e,
+          "Verification failed. The link may be expired or invalid.",
+        ),
       );
     }
   }
 
   /// Complete login flow: sync data and load user
   Future<void> _completeLogin() async {
-    await _syncService.pull();
-
-    final response = await ServiceLocator.instance.authRemoteDataSource.getCurrentUser();
+    // FIX: Fetch company info FIRST before any sync
+    final response = await ServiceLocator.instance.authRemoteDataSource
+        .getCurrentUser();
+    print('DEBUG: getCurrentUser response = $response');
     final user = User.fromJson(response['employee'] ?? response);
-    final company =
-        response['company'] != null ? Company.fromJson(response['company']) : null;
+    final company = response['company'] != null
+        ? Company.fromJson(response['company'])
+        : null;
+
+    print('DEBUG: Parsed company.id = ${company?.id}');
+
+    // FIX: Get tenantId from JWT (authoritative source)
+    final token = await ServiceLocator.instance.secureStorage.read(key: 'auth_token');
+    if (token == null) {
+      throw Exception('No auth token found');
+    }
+    final jwtPayload = _decodeJwt(token);
+    final tenantIdFromJwt = int.parse(jwtPayload['tenant_id'].toString());
+    print('DEBUG: tenantId from JWT = $tenantIdFromJwt');
+
+    // Verify match with company.tenantId (optional safety check)
+    if (company != null && company.tenantId != null && company.tenantId != tenantIdFromJwt) {
+      print('DEBUG WARNING: Tenant mismatch - JWT=$tenantIdFromJwt, company=${company.tenantId}');
+    }
+
+    // FIX: Set tenantId from JWT BEFORE sync
+    if (company != null) {
+      print('DEBUG: ABOUT TO CALL setTenantId with tenantIdFromJwt=$tenantIdFromJwt');
+      await ServiceLocator.instance.tenantService.setTenantId(tenantIdFromJwt);
+      print(
+        'DEBUG: AFTER setTenantId, current tenantId=${ServiceLocator.instance.tenantService.tenantId}',
+      );
+
+      // Schedule DB clear in background - don't block login flow
+      // DIAGNOSTIC: Disable DB clear to isolate sync issues
+      // print('DEBUG: Scheduling background DB clear...');
+      // unawaited(_clearDbInBackground());
+
+      // Continue login immediately - don't wait for DB operations
+      print('DEBUG: Login flow continuing without waiting for DB...');
+    } else {
+      print('DEBUG WARNING: company is NULL - NOT calling setTenantId');
+    }
+
+    // Start background sync after short delay to ensure DB clear completes first
+    print('DEBUG: Scheduling background sync...');
+    await Future.delayed(const Duration(milliseconds: 500));
+    unawaited(_runPostLoginSync());
 
     final companies = await _authRepository.getMyCompanies();
-
-    if (company != null) {
-      await ServiceLocator.instance.tenantService.setTenantId(company.id);
-    }
 
     state = AuthState(
       status: AuthStatus.authenticated,
@@ -380,6 +455,61 @@ class AuthController extends StateNotifier<AuthState> {
       company: company,
       companies: companies,
     );
+  }
+
+  /// Background methods for post-login operations
+  bool _isClearingDb = false;
+
+  Future<void> _clearDbInBackground() async {
+    if (_isClearingDb) {
+      print('DEBUG: DB clear already in progress - skipping');
+      return;
+    }
+    _isClearingDb = true;
+    try {
+      await ServiceLocator.instance.database.clearAllData()
+          .timeout(const Duration(seconds: 3));
+      print('DEBUG: Database cleared in background');
+    } catch (e) {
+      print('DEBUG: DB clear failed (ignored): $e');
+    } finally {
+      _isClearingDb = false;
+    }
+  }
+
+  bool _isRunningPostLoginSync = false;
+
+  Future<void> _runPostLoginSync() async {
+    if (_isRunningPostLoginSync) {
+      print('DEBUG: Post-login sync already running - skipping');
+      return;
+    }
+    _isRunningPostLoginSync = true;
+    try {
+      // Wait a bit to let DB clear finish first
+      await Future.delayed(const Duration(milliseconds: 500));
+      print('DEBUG: Running post-login sync...');
+      
+      // DIAGNOSTIC: Add timing and error logging
+      try {
+        print('[DIAG][${DateTime.now().toIso8601String()}] _runPostLoginSync: STARTING');
+        await _syncService.pull();
+        print('[DIAG][${DateTime.now().toIso8601String()}] _runPostLoginSync: COMPLETED');
+        
+        // DIAGNOSTIC: Check DB population after sync
+        final productsResult = await ServiceLocator.instance.database.getAllProducts();
+        final count = productsResult.length;
+        print('[DIAG][${DateTime.now().toIso8601String()}] Products in DB after sync: $count');
+      } catch (e) {
+        print('[DIAG][${DateTime.now().toIso8601String()}] _runPostLoginSync: ERROR - $e');
+      }
+      
+      print('DEBUG: Post-login sync completed');
+    } catch (e) {
+      print('DEBUG: Post-login sync failed (ignored): $e');
+    } finally {
+      _isRunningPostLoginSync = false;
+    }
   }
 
   /// Extract error message from various exception types

@@ -25,6 +25,11 @@ import 'package:ezo/features/suppliers/supplier_list_screen.dart';
 import 'package:ezo/features/employees/employee_list_screen.dart';
 import 'package:ezo/features/pos/pos_screen.dart';
 import 'package:ezo/features/inventory/reports/invoice_settings_screen.dart';
+import 'package:ezo/features/stock_mgmt/inventory_dashboard_screen.dart';
+import 'package:ezo/features/purchase_receipt/purchase_receipt_screen.dart';
+import 'package:ezo/features/ledger/customer_ledger/customer_ledger.dart';
+import 'package:ezo/features/ledger/supplier_ledger/supplier_ledger.dart';
+import 'package:ezo/features/purchase_receipt/purchase_entry_screen.dart';
 import 'package:ezo/features/debug_screen.dart';
 
 import 'package:ezo/features/invoice/screens/invoice_form_screen.dart';
@@ -35,6 +40,8 @@ import 'package:ezo/features/profile/presentation/screens/company_profile_screen
 import 'package:ezo/features/profile/presentation/screens/my_companies_screen.dart';
 import 'package:ezo/features/settings/screens/settings_screen.dart';
 import 'package:ezo/features/settings/screens/role_settings_screen.dart';
+import 'package:ezo/features/ledger/customer_ledger/add_customer_ledger.dart';
+import 'package:ezo/features/ledger/supplier_ledger/add_supplier_ledger.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,10 +62,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
 
         // Clean double slashes recursively in the full URI string if path was misparsed
-        if (state.uri.toString().contains('//') && !state.uri.toString().contains('://')) {
-           final cleanPath = state.uri.path.replaceAll(RegExp(r'/+'), '/');
-           final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
-           return '$cleanPath$query';
+        if (state.uri.toString().contains('//') &&
+            !state.uri.toString().contains('://')) {
+          final cleanPath = state.uri.path.replaceAll(RegExp(r'/+'), '/');
+          final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+          return '$cleanPath$query';
         }
 
         if (state.uri.path.contains('//')) {
@@ -97,7 +105,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (!isVerified) {
           // Allow internal verification route even if not verified yet
           if (state.uri.path == '/verify-email') return null;
-          
+
           if (!isPendingScreen) return '/verify-pending';
           return null;
         }
@@ -334,6 +342,69 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/employees',
                 builder: (context, state) => const EmployeeListScreen(),
+              ),
+            ],
+          ),
+
+          // Index 16: Inventory Dashboard
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/inventory-dashboard',
+                builder: (context, state) => const InventoryDashboard(),
+              ),
+            ],
+          ),
+
+          // Index 17: Purchase Receipt
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/purchase-receipt',
+                builder: (context, state) => const PurchaseReceiptPage(),
+                routes: [
+                  GoRoute(
+                    path: 'add',
+                    builder: (context, state) {
+                      final receipt = state.extra as PurchaseReceiptEntity?;
+                      return PurchaseReceiptForm(receiptToEdit: receipt);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Index 18: Customer Ledger
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/customer-ledger',
+                builder: (context, state) => const CustomerLedgerScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'add',
+                    builder: (context, state) =>
+                        const AddCustomerLedgerScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Index 19: Supplier Ledger
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/supplier-ledger',
+                builder: (context, state) => const SupplierLedgerScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'add',
+                    builder: (context, state) =>
+                        const AddSupplierLedgerScreen(),
+                  ),
+                ],
               ),
             ],
           ),

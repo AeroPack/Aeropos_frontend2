@@ -17,7 +17,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Use path URL strategy on web so reset/verify links work without # prefix
   if (kIsWeb) usePathUrlStrategy();
-  await ServiceLocator.instance.initialize();
+
+  try {
+    await ServiceLocator.instance.initialize();
+  } catch (e) {
+    print('DEBUG: ServiceLocator failed: $e');
+    // Don't rethrow - let app start and show login
+  }
 
   runApp(const ProviderScope(child: EzoPosApp()));
 

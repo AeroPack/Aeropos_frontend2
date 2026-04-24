@@ -35,6 +35,23 @@ class Sale {
     this.isDeleted = false,
     required this.items,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'uuid': uuid,
+    'invoice_number': invoiceNumber,
+    'customer_id': customerId,
+    'subtotal': subtotal,
+    'tax': tax,
+    'discount': discount,
+    'total': total,
+    'payment_method': paymentMethod,
+    'status': status,
+    'notes': notes,
+    'created_at': createdAt.toIso8601String(),
+    'is_deleted': isDeleted,
+    'items': items.map((i) => i.toJson()).toList(),
+  };
 }
 
 class SaleItem {
@@ -63,4 +80,16 @@ class SaleItem {
     this.syncStatus = SyncStatus.synced,
     this.isDeleted = false,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'uuid': uuid,
+    'sale_id': saleId,
+    'product_id': productId,
+    'quantity': quantity,
+    'unit_price': unitPrice,
+    'discount': discount,
+    'total': total,
+    'is_deleted': isDeleted,
+  };
 }

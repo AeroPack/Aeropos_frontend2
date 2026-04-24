@@ -2,12 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ezo/core/database/app_database.dart';
 import 'package:ezo/core/di/service_locator.dart';
 import 'package:ezo/features/pos/state/pos_category_state.dart';
+import 'package:ezo/core/models/product_unit.dart';
+import 'package:drift/drift.dart' show OrderingTerm;
 
 // 1. Models
 class CartItem {
   final ProductEntity product;
   final double quantity;
-  final double manualDiscount; // The value (either Rs or %)
+  final ProductUnit? selectedUnit;
+  final double manualDiscount;
   final bool isPercentDiscount;
   final List<String>? modifiers;
   final String? course;
@@ -15,11 +18,37 @@ class CartItem {
   const CartItem({
     required this.product,
     this.quantity = 1.0,
+    this.selectedUnit,
     this.manualDiscount = 0.0,
     this.isPercentDiscount = false,
     this.modifiers,
     this.course,
   });
+
+  double get unitPrice => quantity > 0 ? calculatedPrice / quantity : 0;
+
+  double get calculatedPrice {
+    if (selectedUnit == null) {
+      return product.price * quantity;
+    }
+
+    final qtyInBase = quantity * selectedUnit!.conversionFactor;
+
+    // Case 1: Selected unit has its own selling_price
+    if (selectedUnit!.sellingPrice != null) {
+      return selectedUnit!.sellingPrice! * quantity;
+    }
+
+    // Case 2: Derive from another unit with selling_price (highest conversion_factor)
+    // This requires productUnits from cache - need to check via CartNotifier
+    // For now, fall back to product price
+    if (product.price > 0) {
+      final rawPrice = qtyInBase * product.price;
+      return rawPrice.roundToDouble();
+    }
+
+    return product.price * quantity;
+  }
 
   double get taxRate {
     final rateStr = product.gstRate?.replaceAll('%', '') ?? '0';
@@ -28,41 +57,47 @@ class CartItem {
 
   double get tax {
     final rate = taxRate;
+    final effectivePrice = selectedUnit != null
+        ? calculatedPrice
+        : (product.price * quantity);
     double discountAmount = manualDiscount;
     if (isPercentDiscount) {
-      discountAmount = (product.price * quantity) * (manualDiscount / 100);
+      discountAmount = effectivePrice * (manualDiscount / 100);
     }
-    final totalBeforeTax = ((product.price) * quantity) - discountAmount;
+    final totalBeforeTax = effectivePrice - discountAmount;
 
     if (product.gstType?.toLowerCase() == 'exclusive' ||
         product.gstType?.toLowerCase() == 'excluding') {
       return (totalBeforeTax * rate) / 100;
     } else {
-      // Inclusive case: tax = (total * rate) / (100 + rate)
       return (totalBeforeTax * rate) / (100 + rate);
     }
   }
 
   double get subtotal {
+    final effectivePrice = selectedUnit != null
+        ? calculatedPrice
+        : (product.price * quantity);
     double discountAmount = manualDiscount;
     if (isPercentDiscount) {
-      discountAmount = (product.price * quantity) * (manualDiscount / 100);
+      discountAmount = effectivePrice * (manualDiscount / 100);
     }
-    final totalBeforeTax = ((product.price) * quantity) - discountAmount;
+    final totalBeforeTax = effectivePrice - discountAmount;
     if (product.gstType?.toLowerCase() == 'exclusive' ||
         product.gstType?.toLowerCase() == 'excluding') {
       return totalBeforeTax;
     } else {
-      // For inclusive, the unit price already contains the tax
       return totalBeforeTax - tax;
     }
   }
 
-  double get total => (subtotal) + (tax);
+  double get total => subtotal + tax;
 
   CartItem copyWith({
     ProductEntity? product,
     double? quantity,
+    ProductUnit? selectedUnit,
+    double? basePrice,
     double? manualDiscount,
     bool? isPercentDiscount,
     List<String>? modifiers,
@@ -71,6 +106,7 @@ class CartItem {
     return CartItem(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
+      selectedUnit: selectedUnit ?? this.selectedUnit,
       manualDiscount: manualDiscount ?? this.manualDiscount,
       isPercentDiscount: isPercentDiscount ?? this.isPercentDiscount,
       modifiers: modifiers ?? this.modifiers,
@@ -137,6 +173,71 @@ class CartState {
 class CartNotifier extends StateNotifier<CartState> {
   CartNotifier() : super(const CartState());
 
+  final Map<int, List<ProductUnitEntity>> _productUnitsCache = {};
+
+  Future<void> loadProductUnits(int productId) async {
+    if (_productUnitsCache.containsKey(productId)) return;
+
+    final db = ServiceLocator.instance.database;
+    final units =
+        await (db.select(db.productUnits)
+              ..where((t) => t.productId.equals(productId))
+              ..orderBy([(t) => OrderingTerm.desc(t.conversionFactor)]))
+            .get();
+
+    _productUnitsCache[productId] = units;
+  }
+
+  void setProductUnitsCache(int productId, List<ProductUnitEntity> units) {
+    _productUnitsCache[productId] = units;
+  }
+
+  List<ProductUnitEntity>? getProductUnits(int productId) {
+    return _productUnitsCache[productId];
+  }
+
+  double calculatePrice({
+    required ProductEntity product,
+    required double quantity,
+    required ProductUnit? selectedUnit,
+  }) {
+    if (selectedUnit == null) {
+      return product.price * quantity;
+    }
+
+    final qtyInBase = quantity * selectedUnit.conversionFactor;
+
+    // Case 1: Selected unit has its own selling_price
+    if (selectedUnit.sellingPrice != null) {
+      return selectedUnit.sellingPrice! * quantity;
+    }
+
+    // Case 2: Derive from another unit with selling_price (highest conversion_factor)
+    final productUnits = _productUnitsCache[product.id];
+    if (productUnits != null) {
+      final unitsWithPrice =
+          productUnits.where((u) => u.sellingPrice != null).toList()
+            ..sort((a, b) => b.conversionFactor.compareTo(a.conversionFactor));
+
+      if (unitsWithPrice.isNotEmpty &&
+          unitsWithPrice.first.conversionFactor > 0) {
+        final basePrice =
+            unitsWithPrice.first.sellingPrice! /
+            unitsWithPrice.first.conversionFactor;
+        final rawPrice = qtyInBase * basePrice;
+        return rawPrice.roundToDouble();
+      }
+    }
+
+    // Case 3: Fallback to product price
+    if (product.price > 0) {
+      final rawPrice = qtyInBase * product.price;
+      return rawPrice.roundToDouble();
+    }
+
+    return product.price * quantity;
+  }
+
   bool _compareModifiers(List<String>? a, List<String>? b) {
     if (a == null && b == null) return true;
     if (a == null || b == null) return false;
@@ -152,6 +253,7 @@ class CartNotifier extends StateNotifier<CartState> {
   void addProduct(
     ProductEntity product, {
     double quantity = 1.0,
+    ProductUnit? selectedUnit,
     List<String>? modifiers,
     String? course,
   }) {
@@ -159,7 +261,8 @@ class CartNotifier extends StateNotifier<CartState> {
       (i) =>
           i.product.id == product.id &&
           _compareModifiers(i.modifiers, modifiers) &&
-          i.course == course,
+          i.course == course &&
+          i.selectedUnit?.id == selectedUnit?.id,
     );
 
     if (existingIndex >= 0) {
@@ -185,6 +288,7 @@ class CartNotifier extends StateNotifier<CartState> {
           CartItem(
             product: product,
             quantity: quantity,
+            selectedUnit: selectedUnit,
             manualDiscount: validDiscount,
             isPercentDiscount: product.isPercentDiscount,
             modifiers: modifiers,
@@ -197,6 +301,7 @@ class CartNotifier extends StateNotifier<CartState> {
 
   void removeProduct(
     ProductEntity product, {
+    ProductUnit? selectedUnit,
     List<String>? modifiers,
     String? course,
   }) {
@@ -205,6 +310,7 @@ class CartNotifier extends StateNotifier<CartState> {
           .where(
             (i) =>
                 i.product.id != product.id ||
+                i.selectedUnit?.id != selectedUnit?.id ||
                 !_compareModifiers(i.modifiers, modifiers) ||
                 i.course != course,
           )
@@ -215,11 +321,17 @@ class CartNotifier extends StateNotifier<CartState> {
   void updateQuantity(
     ProductEntity product,
     double quantity, {
+    ProductUnit? selectedUnit,
     List<String>? modifiers,
     String? course,
   }) {
     if (quantity <= 0) {
-      removeProduct(product, modifiers: modifiers, course: course);
+      removeProduct(
+        product,
+        selectedUnit: selectedUnit,
+        modifiers: modifiers,
+        course: course,
+      );
       return;
     }
 
@@ -227,11 +339,15 @@ class CartNotifier extends StateNotifier<CartState> {
       (i) =>
           i.product.id == product.id &&
           _compareModifiers(i.modifiers, modifiers) &&
-          i.course == course,
+          i.course == course &&
+          (selectedUnit != null ? i.selectedUnit?.id == selectedUnit.id : true),
     );
     if (index >= 0) {
       final newItems = List<CartItem>.from(state.items);
-      newItems[index] = newItems[index].copyWith(quantity: quantity);
+      newItems[index] = newItems[index].copyWith(
+        quantity: quantity,
+        selectedUnit: selectedUnit ?? newItems[index].selectedUnit,
+      );
       state = state.copyWith(items: newItems);
     }
   }
@@ -239,9 +355,18 @@ class CartNotifier extends StateNotifier<CartState> {
   void updateItemDiscount(
     ProductEntity product,
     double discount,
-    bool isPercent,
-  ) {
-    final index = state.items.indexWhere((i) => i.product.id == product.id);
+    bool isPercent, {
+    ProductUnit? selectedUnit,
+    List<String>? modifiers,
+    String? course,
+  }) {
+    final index = state.items.indexWhere(
+      (i) =>
+          i.product.id == product.id &&
+          i.selectedUnit?.id == selectedUnit?.id &&
+          _compareModifiers(i.modifiers, modifiers) &&
+          i.course == course,
+    );
     if (index >= 0) {
       double validDiscount = discount;
       final itemSubtotal =

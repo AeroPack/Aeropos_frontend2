@@ -52,7 +52,11 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
   final _db = ServiceLocator.instance.database;
   StreamSubscription? _subscription;
 
-  int get _tenantId => ServiceLocator.instance.tenantService.tenantId;
+  int get _tenantId {
+    final tenantId = ServiceLocator.instance.tenantService.tenantId;
+    print('DEBUG: SalesHistoryNotifier _tenantId = $tenantId');
+    return tenantId;
+  }
 
   void _listenToChanges() {
     _subscription?.cancel();
@@ -107,6 +111,7 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
         queryStr: state.query.isEmpty ? null : state.query,
         tenantId: _tenantId,
       );
+      print('DEBUG: _loadData got ${newItems.length} items');
 
       int totalItems = state.totalItems;
       if (fetchCount) {
@@ -114,6 +119,7 @@ class SalesHistoryNotifier extends StateNotifier<SalesHistoryState> {
           queryStr: state.query.isEmpty ? null : state.query,
           tenantId: _tenantId,
         );
+        print('DEBUG: getInvoiceItemsCount returned $totalItems');
       }
 
       // Calculate hasMore based on total count

@@ -82,10 +82,18 @@ class EmployeeViewModel {
   }
 
   Future<void> syncPendingEmployees() async {
-    await _syncService.push();
+    try {
+      await _syncService.push();
+    } catch (e) {
+      print('EmployeeViewModel syncPendingEmployees error: $e');
+    }
   }
 
   Future<void> fetchAndSync() async {
-    await _syncService.pull();
+    try {
+      await _syncService.pull();
+    } catch (e) {
+      print('EmployeeViewModel fetchAndSync error: $e');
+    }
   }
 }

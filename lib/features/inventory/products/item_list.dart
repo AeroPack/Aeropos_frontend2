@@ -26,7 +26,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
   @override
   void initState() {
     super.initState();
-    _handleSync();
     _fetchUser();
   }
 
@@ -48,8 +47,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   void _handleSync() async {
     if (!mounted) return;
-    await viewModel.syncPendingProducts();
-    await viewModel.fetchAndSync();
+    await viewModel.syncPendingProducts().then((_) => viewModel.fetchAndSync());
   }
 
   @override
@@ -107,13 +105,26 @@ class _ProductListScreenState extends State<ProductListScreen> {
               actions: [
                 Builder(
                   builder: (context) {
-                    final exportHeaders = ['S.No', 'Product Name', 'SKU', 'Category', 'Brand', 'Price'];
+                    final exportHeaders = [
+                      'S.No',
+                      'Product Name',
+                      'SKU',
+                      'Category',
+                      'Brand',
+                      'Price',
+                    ];
                     final exportRows = results.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final item = entry.value;
-                      final product = item.readTable(viewModel.database.products);
-                      final category = item.readTableOrNull(viewModel.database.categories);
-                      final brand = item.readTableOrNull(viewModel.database.brands);
+                      final product = item.readTable(
+                        viewModel.database.products,
+                      );
+                      final category = item.readTableOrNull(
+                        viewModel.database.categories,
+                      );
+                      final brand = item.readTableOrNull(
+                        viewModel.database.brands,
+                      );
                       return [
                         '${idx + 1}',
                         product.name,
@@ -264,7 +275,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
         .toList()
       ..sort((a, b) => a.label.compareTo(b.label));
   }
-
 
   void _showDeleteConfirmation(BuildContext context, ProductEntity product) {
     DeleteConfirmationDialog.show(
