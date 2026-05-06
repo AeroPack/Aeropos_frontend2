@@ -73,6 +73,14 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 39;
 
+  Future<void> _addColumnIfNotExists(
+    String table,
+    String column,
+    String definition,
+  ) async {
+    await customStatement('ALTER TABLE $table ADD COLUMN $column $definition');
+  }
+
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -93,12 +101,17 @@ class AppDatabase extends _$AppDatabase {
         }
 
         if (from < 35) {
-          await customStatement(
-            'ALTER TABLE products ADD COLUMN base_unit_id INTEGER',
-          );
-          await customStatement(
-            'ALTER TABLE products ADD COLUMN allow_loose_sale INTEGER NOT NULL DEFAULT 1',
-          );
+          try {
+            await _addColumnIfNotExists('products', 'base_unit_id', 'INTEGER');
+          } catch (e) {
+            if (!e.toString().contains('duplicate column name')) rethrow;
+          }
+          try {
+            await _addColumnIfNotExists(
+                'products', 'allow_loose_sale', 'INTEGER NOT NULL DEFAULT 1');
+          } catch (e) {
+            if (!e.toString().contains('duplicate column name')) rethrow;
+          }
           // Create product_units table
           await m.createTable(productUnits);
 
