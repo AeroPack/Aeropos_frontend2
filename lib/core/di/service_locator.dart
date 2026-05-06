@@ -162,10 +162,10 @@ Future<void> initialize() async {
     );
 
     // Start background sync (only once)
-    // DISABLED - Using new SyncService instead, old SyncEngine causes conflicts
-    // syncEngine.startAutoSync();
+    // Now ENABLE SyncEngine (was disabled, causing push issues)
+    syncEngine.startAutoSync();
 
-    // Keep old sync service for backward compatibility during migration
+    // Keep old SyncService for backward compatibility (but DON'T start its auto-sync)
     syncService = SyncService(
       db: database,
       dio: dio,
@@ -218,11 +218,11 @@ Future<void> initialize() async {
       syncService,
     );
 
-    // Start auto-sync ONLY if tenant already restored from storage
-    // This prevents race condition where sync runs before tenant is ready
-    if (tenantService.tenantIdOrNull != null) {
-      syncService.startAutoSync(interval: const Duration(minutes: 5));
-    }
+    // SyncEngine is now handling auto-sync via startAutoSync()
+// SyncService auto-sync is DISABLED to avoid duplicate syncs
+// if (tenantService.tenantIdOrNull != null) {
+//   syncService.startAutoSync(interval: const Duration(minutes: 5));
+// }
   }
 
   Future<void> dispose() async {

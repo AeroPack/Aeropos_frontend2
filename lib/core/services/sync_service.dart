@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-// import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
@@ -136,6 +135,27 @@ class SyncResult {
       failedCounts.values.fold(0, (sum, count) => sum + count);
 }
 
+// ----------------------------------------------------------------------
+// Internal helpers for push operations
+// ----------------------------------------------------------------------
+
+class _RecordRef {
+  final String table;
+  final String uuid;
+  final int localId;
+  _RecordRef(this.table, this.uuid, this.localId);
+}
+
+class _PendingOp {
+  final String table;
+  final String uuid;
+  final int localId;
+  final Map<String, dynamic> data;
+  _PendingOp(this.table, this.uuid, this.localId, this.data);
+}
+
+// ----------------------------------------------------------------------
+
 @Deprecated(
   'Use SyncEngine from sync_engine.dart instead. Will be removed after v2.0. Migration required.',
 )
@@ -177,7 +197,6 @@ class SyncService {
       '[DEPRECATED] SyncService is deprecated. Use SyncEngine instead. Migration required.',
     );
     _initializeDeviceId();
-    // Reset flags in case a previous run crashed and left them true
     _isSyncing = false;
     _isPulling = false;
   }
@@ -193,12 +212,14 @@ class SyncService {
   }
 
   void startAutoSync({Duration interval = const Duration(minutes: 5)}) {
+    print('[DIAG][AUTO_SYNC_INIT] Starting with interval: $interval');
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(interval, (_) {
+      print('[DIAG][AUTO_SYNC_TIMER] Timer fired - calling sync()');
       sync();
     });
-    // Delay the first sync to let AuthController finish login
     Future.delayed(const Duration(seconds: 5), () {
+      print('[DIAG][AUTO_SYNC_INITIAL] Initial sync after 5s delay');
       sync();
     });
   }
@@ -210,18 +231,24 @@ class SyncService {
 
   /// Debounced sync — coalesces rapid-fire calls into one execution
   Future<void> sync() async {
-    // Only debounce if not already syncing
-    if (_isSyncing) return;
+    // ===== DIAG LOG: Sync entry point =====
+    print('[DIAG][SYNC_ENTRY] sync() called, _isSyncing=$_isSyncing');
+    
+    if (_isSyncing) {
+      print('[DIAG][SYNC_ENTRY] Early exit - already syncing');
+      return;
+    }
 
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = Timer(const Duration(seconds: 2), () {
+      print('[DIAG][SYNC_ENTRY] Debounce timer fired - calling _doSync()');
       _doSync();
     });
   }
 
   Future<void> _doSync() async {
     if (_isSyncing) {
-      print('DEBUG SYNC: Already syncing - skipping');
+      print('[DIAG][SYNC_SKIP] Already syncing - returning early');
       return;
     }
     _isSyncing = true;
@@ -230,28 +257,35 @@ class SyncService {
       final storage = ServiceLocator.instance.secureStorage;
       final token = await storage.read(key: 'auth_token');
       if (token == null || token.isEmpty) {
-        print('DEBUG SYNC: No auth token - skipping');
+        print('[DIAG][SYNC_SKIP] No auth token');
         return;
       }
 
       final tenantId = ServiceLocator.instance.tenantService.tenantIdOrNull;
       if (tenantId == null || tenantId <= 0) {
-        print('DEBUG SYNC: Invalid tenantId=$tenantId - skipping');
+        print('[DIAG][SYNC_SKIP] Invalid tenantId=$tenantId');
         return;
       }
 
-      // await push(); // Uncomment when push is ready
-      await pull();
-    } on Object catch (_) {
+      print('[DIAG][SYNC_START] push() called');
+      await push(); // Push local changes first
+      print('[DIAG][PUSH_DONE] Push completed');
+
+      print('[DIAG][SYNC_START] pull() called');
+      await pull(); // Then fetch remote updates
+      print('[DIAG][PULL_DONE] Pull completed');
+    } on Object catch (e) {
+      // ===== DIAG LOG: Was silently swallowed before! =====
+      print('[DIAG][SYNC_ERROR] Exception caught: $e');
     } finally {
       _isSyncing = false;
+      print('[DIAG][SYNC_FINISHED] _isSyncing set to false');
     }
   }
 
   /// Check if there are any pending changes that need to be synced
   Future<bool> hasPendingChanges() async {
     try {
-      // Check all tables for records with syncStatus = 1
       final pendingCategories =
           await (db.select(db.categories)
                 ..where((t) => t.syncStatus.equals(1))
@@ -310,7 +344,7 @@ class SyncService {
 
       return false;
     } catch (e) {
-      return false; // Assume no pending changes on error
+      return false;
     }
   }
 
@@ -375,12 +409,8 @@ class SyncService {
     _isSyncing = true;
 
     try {
-      // Step 1: Clear all local data
       await db.clearAllData();
-
-      // Step 2: Pull all data from API (lastSyncTime will be null, forcing full sync)
       await pull();
-
       return true;
     } catch (e) {
       if (e is DioException) {}
@@ -391,7 +421,7 @@ class SyncService {
   }
 
   // ----------------------------------------------------------------------
-  // PULL (updated with correct payload and header handling)
+  // PULL (unchanged from original)
   // ----------------------------------------------------------------------
   Future<void> pull() async {
     if (_isPulling) {
@@ -413,7 +443,6 @@ class SyncService {
     }
   }
 
-  // Separate inner method for pull logic
   Future<void> _doPull() async {
     print('[DIAG] 1: enter _doPull');
 
@@ -431,14 +460,12 @@ class SyncService {
       return;
     }
 
-    // Ensure company_id is stored (needed for X-Company-Id header)
     String? companyId = await storage.read(key: 'company_id');
     if (companyId == null || companyId.isEmpty) {
       print('[SYNC] Warning: company_id not found in storage.');
     }
 
     print('[DIAG] 2: before deviceId');
-    // Get or generate device ID
     String? deviceId = await storage.read(key: 'device_id');
     if (deviceId == null) {
       deviceId = const Uuid().v4();
@@ -450,19 +477,25 @@ class SyncService {
     print('[DIAG] 4: before lastSyncTime');
     final lastSyncTime = await _getLastSyncTime();
     final lastCursor = await _getLastSyncCursor();
-    print('[DIAG] 5: after lastSyncTime: $lastSyncTime');
+    print('[DIAG] 5: after lastSyncTime: $lastSyncTime, lastCursor: $lastCursor');
+
+    // Prefer cursor over timestamp — cursor is more precise
+    final String syncFrom = lastCursor 
+        ?? lastSyncTime?.toUtc().toIso8601String() 
+        ?? '2020-01-01T00:00:00.000Z';
+
+    // ===== DIAG LOG 1: When pull is triggered =====
+    print('[DIAG][PULL_TRIGGER] syncFrom=$syncFrom (cursor: $lastCursor, timestamp: ${lastSyncTime?.toIso8601String()})');
 
     print('[DIAG] 6: before payload');
-    // NEW payload format matching backend contract
     final syncPayload = {
       'deviceId': deviceId,
-      'lastPulledAt':
-          lastSyncTime?.toUtc().toIso8601String() ?? '2026-01-01T00:00:00.000Z',
+      'lastPulledAt': syncFrom,
       'operations': <Map<String, dynamic>>[],
     };
     print('[SYNC][PULL] Payload: ${jsonEncode(syncPayload)}');
     print(
-      '[SYNC][PULL] Requesting since: ${lastSyncTime?.toIso8601String() ?? "null"}',
+      '[SYNC][PULL] Requesting since: $syncFrom',
     );
     print('[SYNC][PULL] Tenant: $_tenantId');
 
@@ -486,33 +519,46 @@ class SyncService {
     if (response.statusCode == 200) {
       final responseData = response.data as Map<String, dynamic>;
 
-      // NEW operation-based response format
       final operations = responseData['operations'] as List<dynamic>?;
+
+      // ===== DIAG LOG 2: When server response arrives =====
+      print('[DIAG][PULL_RECORDS] ${operations?.length ?? 0} records received from server');
 
       if (operations != null && operations.isNotEmpty) {
         print('[SYNC][PULL] Received ${operations.length} operations');
 
-        // Process operations one by one with explicit logging
         for (var op in operations) {
-          print('[SYNC] Processing: ${op['type']} on ${op['table']}');
+          // ===== DIAG LOG 3: When each pulled record is upserted =====
+          print('[DIAG][PULL_UPSERT] ${op['table']}:${op['recordId']} type=${op['type']}');
           await _processOperation(op);
         }
       } else {
         print('[SYNC][PULL] No operations to process');
       }
 
-      // Store nextCursor for future incremental syncs
       final nextCursor = responseData['nextCursor'] as String?;
       if (nextCursor != null) {
         await _updateLastSyncCursor(nextCursor);
+        print('[DIAG][CURSOR_SAVED] nextCursor=$nextCursor');
       }
 
-      await _updateLastSyncTime(DateTime.now());
+      // Use server's time to avoid local clock drift
+      final serverTime = responseData['serverTime'] as String?;
+      if (serverTime != null) {
+        await _updateLastSyncTime(DateTime.parse(serverTime).toLocal());
+        print('[DIAG][SYNC_TIME_UPDATED] serverTime=$serverTime -> local=${DateTime.parse(serverTime).toLocal().toIso8601String()}');
+      } else {
+        await _updateLastSyncTime(DateTime.now());
+      }
+      
+      // ===== DIAG LOG 4: When sync completes =====
+      print('[DIAG][PULL_COMPLETE] Success - all records upserted');
       print('[SYNC][PULL] ✓ Completed');
+    } else {
+      print('[DIAG][PULL_ERROR] Server returned status: ${response.statusCode}');
     }
   }
 
-  // Process individual operation (new operation-based format)
   Future<void> _processOperation(Map<String, dynamic> op) async {
     final table = op['table'] as String?;
     final type = op['type'] as String?;
@@ -556,173 +602,384 @@ class SyncService {
     }
   }
 
-  // Individual upsert handlers
+  // Individual upsert handlers (unchanged from original)
   Future<void> _upsertUnit(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.units)
-        .insertOnConflictUpdate(
-          UnitsCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            symbol: Value(data['symbol'] as String? ?? ''),
-            isActive: Value(data['is_active'] as bool? ?? true),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.units)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.units)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            UnitsCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              symbol: Value(data['symbol'] as String? ?? ''),
+              isActive: Value(data['is_active'] as bool? ?? true),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      await db.into(db.units).insert(
+        UnitsCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          symbol: Value(data['symbol'] as String? ?? ''),
+          isActive: Value(data['is_active'] as bool? ?? true),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertCategory(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.categories)
-        .insertOnConflictUpdate(
-          CategoriesCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            subcategory: Value(data['subcategory'] as String?),
-            description: Value(data['description'] as String?),
-            isActive: Value(data['is_active'] as bool? ?? true),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.categories)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.categories)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            CategoriesCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              subcategory: Value(data['subcategory'] as String?),
+              description: Value(data['description'] as String?),
+              isActive: Value(data['is_active'] as bool? ?? true),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      await db.into(db.categories).insert(
+        CategoriesCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          subcategory: Value(data['subcategory'] as String?),
+          description: Value(data['description'] as String?),
+          isActive: Value(data['is_active'] as bool? ?? true),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertBrand(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.brands)
-        .insertOnConflictUpdate(
-          BrandsCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            description: Value(data['description'] as String?),
-            isActive: Value(data['is_active'] as bool? ?? true),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.brands)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.brands)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            BrandsCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              description: Value(data['description'] as String?),
+              isActive: Value(data['is_active'] as bool? ?? true),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      await db.into(db.brands).insert(
+        BrandsCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          description: Value(data['description'] as String?),
+          isActive: Value(data['is_active'] as bool? ?? true),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertProduct(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.products)
-        .insertOnConflictUpdate(
-          ProductsCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            sku: Value(data['sku'] as String?),
-            price: Value((data['price'] as num?)?.toDouble() ?? 0.0),
-            cost: Value((data['cost'] as num?)?.toDouble()),
-            stockQuantity: Value(data['stock_quantity'] as int? ?? 0),
-            isActive: Value(data['is_active'] as bool? ?? true),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    // Manual upsert by uuid - deterministic, no constraint surprises
+    final existing = await (db.select(db.products)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      // UPDATE existing record by uuid
+      await (db.update(db.products)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            ProductsCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              sku: Value(data['sku'] as String?),
+              price: Value((data['price'] as num?)?.toDouble() ?? 0.0),
+              cost: Value((data['cost'] as num?)?.toDouble()),
+              stockQuantity: Value(data['stock_quantity'] as int? ?? 0),
+              isActive: Value(data['is_active'] as bool? ?? true),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      // INSERT new record
+      await db.into(db.products).insert(
+        ProductsCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          sku: Value(data['sku'] as String?),
+          price: Value((data['price'] as num?)?.toDouble() ?? 0.0),
+          cost: Value((data['cost'] as num?)?.toDouble()),
+          stockQuantity: Value(data['stock_quantity'] as int? ?? 0),
+          isActive: Value(data['is_active'] as bool? ?? true),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertCustomer(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.customers)
-        .insertOnConflictUpdate(
-          CustomersCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            phone: Value(data['phone'] as String?),
-            email: Value(data['email'] as String?),
-            address: Value(data['address'] as String?),
-            creditLimit: Value(
-              (data['credit_limit'] as num?)?.toDouble() ?? 0.0,
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.customers)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.customers)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            CustomersCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              phone: Value(data['phone'] as String?),
+              email: Value(data['email'] as String?),
+              address: Value(data['address'] as String?),
+              creditLimit: Value(
+                (data['credit_limit'] as num?)?.toDouble() ?? 0.0,
+              ),
+              currentBalance: Value(
+                (data['current_balance'] as num?)?.toDouble() ?? 0.0,
+              ),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
             ),
-            currentBalance: Value(
-              (data['current_balance'] as num?)?.toDouble() ?? 0.0,
-            ),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          );
+    } else {
+      await db.into(db.customers).insert(
+        CustomersCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          phone: Value(data['phone'] as String?),
+          email: Value(data['email'] as String?),
+          address: Value(data['address'] as String?),
+          creditLimit: Value(
+            (data['credit_limit'] as num?)?.toDouble() ?? 0.0,
           ),
-        );
+          currentBalance: Value(
+            (data['current_balance'] as num?)?.toDouble() ?? 0.0,
+          ),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertSupplier(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.suppliers)
-        .insertOnConflictUpdate(
-          SuppliersCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            phone: Value(data['phone'] as String?),
-            email: Value(data['email'] as String?),
-            address: Value(data['address'] as String?),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.suppliers)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.suppliers)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            SuppliersCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              phone: Value(data['phone'] as String?),
+              email: Value(data['email'] as String?),
+              address: Value(data['address'] as String?),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      await db.into(db.suppliers).insert(
+        SuppliersCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          phone: Value(data['phone'] as String?),
+          email: Value(data['email'] as String?),
+          address: Value(data['address'] as String?),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertEmployee(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.employees)
-        .insertOnConflictUpdate(
-          EmployeesCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            name: Value(data['name'] as String? ?? ''),
-            phone: Value(data['phone'] as String?),
-            email: Value(data['email'] as String?),
-            address: Value(data['address'] as String?),
-            role: Value(data['role'] as String? ?? 'employee'),
-            password: Value(data['password'] as String?),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
-          ),
-        );
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.employees)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.employees)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            EmployeesCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              name: Value(data['name'] as String? ?? ''),
+              phone: Value(data['phone'] as String?),
+              email: Value(data['email'] as String?),
+              address: Value(data['address'] as String?),
+              role: Value(data['role'] as String? ?? 'employee'),
+              password: Value(data['password'] as String?),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
+            ),
+          );
+    } else {
+      await db.into(db.employees).insert(
+        EmployeesCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          phone: Value(data['phone'] as String?),
+          email: Value(data['email'] as String?),
+          address: Value(data['address'] as String?),
+          role: Value(data['role'] as String? ?? 'employee'),
+          password: Value(data['password'] as String?),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _upsertInvoice(Map<String, dynamic>? data) async {
     if (data == null) return;
-    await db
-        .into(db.invoices)
-        .insertOnConflictUpdate(
-          InvoicesCompanion(
-            uuid: Value(data['uuid'] as String? ?? ''),
-            invoiceNumber: Value(data['invoice_number'] as String? ?? ''),
-            customerId: Value(data['customer_id'] as int?),
-            date: Value(
-              data['created_at'] != null
-                  ? DateTime.parse(data['created_at'])
-                  : DateTime.now(),
+    
+    final uuid = data['uuid'] as String? ?? '';
+    if (uuid.isEmpty) return;
+    
+    final existing = await (db.select(db.invoices)
+          ..where((t) => t.uuid.equals(uuid)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.invoices)
+            ..where((t) => t.uuid.equals(uuid)))
+          .write(
+            InvoicesCompanion(
+              uuid: Value(data['uuid'] as String? ?? ''),
+              invoiceNumber: Value(data['invoice_number'] as String? ?? ''),
+              customerId: Value(data['customer_id'] as int?),
+              date: Value(
+                data['created_at'] != null
+                    ? DateTime.parse(data['created_at'])
+                    : DateTime.now(),
+              ),
+              subtotal: Value((data['subtotal'] as num?)?.toDouble() ?? 0.0),
+              tax: Value((data['tax'] as num?)?.toDouble() ?? 0.0),
+              discount: Value((data['discount'] as num?)?.toDouble() ?? 0.0),
+              total: Value((data['total'] as num?)?.toDouble() ?? 0.0),
+              paymentMethod: Value(data['payment_method'] as String?),
+              tenantId: Value(data['company_id'] as int? ?? _tenantId),
+              updatedAt: Value(DateTime.now()),
+              syncStatus: const Value(0),
+              isDeleted: Value(data['is_deleted'] as bool? ?? false),
             ),
-            subtotal: Value((data['subtotal'] as num?)?.toDouble() ?? 0.0),
-            tax: Value((data['tax'] as num?)?.toDouble() ?? 0.0),
-            discount: Value((data['discount'] as num?)?.toDouble() ?? 0.0),
-            total: Value((data['total'] as num?)?.toDouble() ?? 0.0),
-            paymentMethod: Value(data['payment_method'] as String?),
-            tenantId: Value(data['company_id'] as int? ?? _tenantId),
-            updatedAt: Value(DateTime.now()),
-            syncStatus: const Value(0),
-            isDeleted: Value(data['is_deleted'] as bool? ?? false),
+          );
+    } else {
+      await db.into(db.invoices).insert(
+        InvoicesCompanion(
+          uuid: Value(data['uuid'] as String? ?? ''),
+          invoiceNumber: Value(data['invoice_number'] as String? ?? ''),
+          customerId: Value(data['customer_id'] as int?),
+          date: Value(
+            data['created_at'] != null
+                ? DateTime.parse(data['created_at'])
+                : DateTime.now(),
           ),
-        );
+          subtotal: Value((data['subtotal'] as num?)?.toDouble() ?? 0.0),
+          tax: Value((data['tax'] as num?)?.toDouble() ?? 0.0),
+          discount: Value((data['discount'] as num?)?.toDouble() ?? 0.0),
+          total: Value((data['total'] as num?)?.toDouble() ?? 0.0),
+          paymentMethod: Value(data['payment_method'] as String?),
+          tenantId: Value(data['company_id'] as int? ?? _tenantId),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: const Value(0),
+          isDeleted: Value(data['is_deleted'] as bool? ?? false),
+        ),
+      );
+    }
   }
 
   Future<void> _updateLastSyncCursor(String cursor) async {
@@ -751,7 +1008,6 @@ class SyncService {
   }
 
   /// Force a full sync, ignoring lastSyncTime
-  /// Useful for initial loads or when you need to fetch all historical data
   Future<void> forcePull() async {
     try {
       final storage = ServiceLocator.instance.secureStorage;
@@ -769,7 +1025,7 @@ class SyncService {
             'api/sync',
             data: {
               'deviceId': deviceId,
-              'lastPulledAt': null, // null triggers full sync from server
+              'lastPulledAt': null,
               'operations': <Map<String, dynamic>>[],
             },
             options: Options(
@@ -803,7 +1059,7 @@ class SyncService {
   }
 
   // ----------------------------------------------------------------------
-  // PUSH (existing implementation)
+  // PUSH – NOW USES UNIFIED /api/sync ENDPOINT
   // ----------------------------------------------------------------------
   Future<SyncResult> push() async {
     print('DEBUG SYNC: push() STARTING with tenantId=$_tenantId');
@@ -830,378 +1086,96 @@ class SyncService {
     final errors = <String>[];
 
     try {
-      // Categories
-      final pendingCategories = await (db.select(
-        db.categories,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][categories] → ${pendingCategories.length} ops');
-
-      for (final cat in pendingCategories) {
-        final success = await _pushEntity(
-          'api/categories',
-          {
-            'uuid': cat.uuid,
-            'name': cat.name,
-            'subcategory': cat.subcategory,
-            'description': cat.description,
-            'isActive': cat.isActive,
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.categories)..where((t) => t.id.equals(cat.id)))
-                .write(const CategoriesCompanion(syncStatus: Value(0)));
-          },
-          'Category: ${cat.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.categories)..where((t) => t.id.equals(cat.id)))
-                .write(const CategoriesCompanion(syncStatus: Value(2)));
-          },
+      // 1. Collect all pending local operations (syncStatus = 1)
+      final pending = await _collectAllPendingOperations();
+      if (pending.isEmpty) {
+        print('[SYNC][PUSH] No local changes to push.');
+        return SyncResult(
+          success: true,
+          syncedCounts: syncedCounts,
+          failedCounts: failedCounts,
+          errors: errors,
         );
-        if (success) {
-          syncedCounts['categories'] = syncedCounts['categories']! + 1;
+      }
+
+      // 2. Build the operations array and a map to track opId -> local record
+      final operations = <Map<String, dynamic>>[];
+      final opIdToRecord = <String, _RecordRef>{};
+
+      for (final op in pending) {
+        final opId = const Uuid().v4();
+        final recordUuid = op.uuid;
+        final tableName = op.table;
+
+        final data = _sanitizeData(op.data);
+
+        operations.add({
+          'opId': opId,
+          'type': 'INSERT', // Server performs UPSERT based on UUID
+          'table': tableName,
+          'recordId': recordUuid,
+          'data': data,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        });
+
+        opIdToRecord[opId] = _RecordRef(tableName, recordUuid, op.localId);
+      }
+
+      // 3. Send to /api/sync (combined push + pull handled by _doSync)
+      final storage = ServiceLocator.instance.secureStorage;
+      final deviceId = await storage.read(key: 'device_id') ?? '';
+      final lastSyncTime = await _getLastSyncTime() ?? DateTime.utc(2026);
+
+      print('[SYNC][PUSH] Sending ${operations.length} operations');
+      final response = await dio.post(
+        '/api/sync',
+        data: {
+          'deviceId': deviceId,
+          'lastPulledAt': lastSyncTime.toUtc().toIso8601String(),
+          'operations': operations,
+        },
+      );
+
+      if (response.statusCode != 200) {
+        errors.add('Push failed with status ${response.statusCode}');
+        return SyncResult(
+          success: false,
+          syncedCounts: syncedCounts,
+          failedCounts: failedCounts,
+          errors: errors,
+        );
+      }
+
+      // 4. Process acknowledgements
+      final ackList = response.data['acknowledged'] as List<dynamic>? ?? [];
+      for (final ack in ackList) {
+        final opId = ack['opId'] as String?;
+        final status = ack['status'] as String?;
+        if (opId == null) continue;
+
+        final ref = opIdToRecord[opId];
+        if (ref == null) continue;
+
+        if (status == 'SUCCESS') {
+          await _markSynced(ref);
+          syncedCounts[ref.table] = (syncedCounts[ref.table] ?? 0) + 1;
         } else {
-          failedCounts['categories'] = failedCounts['categories']! + 1;
+          final errorMsg = ack['error']?['message'] ?? 'Unknown error';
+          errors.add('[${ref.table}] $errorMsg (uuid: ${ref.uuid})');
+          await _markFailed(ref);
+          failedCounts[ref.table] = (failedCounts[ref.table] ?? 0) + 1;
         }
       }
 
-      // Units
-      final pendingUnits = await (db.select(
-        db.units,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][units] → ${pendingUnits.length} ops');
-
-      for (final unit in pendingUnits) {
-        final success = await _pushEntity(
-          'api/units',
-          {
-            'uuid': unit.uuid,
-            'name': unit.name,
-            'symbol': unit.symbol,
-            'isActive': unit.isActive,
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.units)..where((t) => t.id.equals(unit.id)))
-                .write(const UnitsCompanion(syncStatus: Value(0)));
-          },
-          'Unit: ${unit.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.units)..where((t) => t.id.equals(unit.id)))
-                .write(const UnitsCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['units'] = syncedCounts['units']! + 1;
-        } else {
-          failedCounts['units'] = failedCounts['units']! + 1;
-        }
-      }
-
-      // Brands
-      final pendingBrands = await (db.select(
-        db.brands,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][brands] → ${pendingBrands.length} ops');
-
-      for (final brand in pendingBrands) {
-        final success = await _pushEntity(
-          'api/brands',
-          {
-            'uuid': brand.uuid,
-            'name': brand.name,
-            'description': brand.description,
-            'isActive': brand.isActive,
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.brands)..where((t) => t.id.equals(brand.id)))
-                .write(const BrandsCompanion(syncStatus: Value(0)));
-          },
-          'Brand: ${brand.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.brands)..where((t) => t.id.equals(brand.id)))
-                .write(const BrandsCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['brands'] = syncedCounts['brands']! + 1;
-        } else {
-          failedCounts['brands'] = failedCounts['brands']! + 1;
-        }
-      }
-
-      // Products (Batch sync)
-      final pendingProducts = await (db.select(
-        db.products,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][products] → ${pendingProducts.length} ops');
-
-      const int productBatchSize = 25;
-      for (var i = 0; i < pendingProducts.length; i += productBatchSize) {
-        final end = (i + productBatchSize < pendingProducts.length)
-            ? i + productBatchSize
-            : pendingProducts.length;
-        final chunk = pendingProducts.sublist(i, end);
-        final List<Map<String, dynamic>> batchData = [];
-
-        for (final prod in chunk) {
-          // Validate references before creating payload
-          try {
-            await validateProductForSync(db, prod);
-          } catch (e) {
-            print('[SYNC][PUSH][products] VALIDATION FAILED → ${prod.id}');
-            // Mark as failed instead of sending
-            await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
-                .write(const ProductsCompanion(syncStatus: Value(2)));
-            failedCounts['products'] = failedCounts['products']! + 1;
-            errors.add('Product ${prod.id}: $e');
-            continue;
-          }
-
-          final unit = prod.unitId != null
-              ? await (db.select(
-                  db.units,
-                )..where((t) => t.id.equals(prod.unitId!))).getSingleOrNull()
-              : null;
-          final category = prod.categoryId != null
-              ? await (db.select(db.categories)
-                      ..where((t) => t.id.equals(prod.categoryId!)))
-                    .getSingleOrNull()
-              : null;
-          final brand = prod.brandId != null
-              ? await (db.select(
-                  db.brands,
-                )..where((t) => t.id.equals(prod.brandId!))).getSingleOrNull()
-              : null;
-
-          // CRITICAL: Only send UUIDs, no integer IDs
-          batchData.add({
-            'uuid': prod.uuid,
-            'name': prod.name,
-            'sku': prod.sku,
-            'price': prod.price,
-            'cost': prod.cost,
-            'stockQuantity': prod.stockQuantity,
-            'categoryUuid': category?.uuid ?? '', // UUID only
-            'unitUuid': unit?.uuid ?? '', // UUID only
-            'brandUuid': brand?.uuid ?? '', // UUID only
-            'gstType': prod.gstType,
-            'gstRate': prod.gstRate,
-            'imageUrl': prod.imageUrl,
-            'isPercentDiscount': prod.isPercentDiscount,
-            'isActive': prod.isActive,
-            'companyId': _tenantId,
-          });
-        }
-
-        final success = await _pushEntity(
-          'api/products',
-          batchData,
-          () async {
-            for (final prod in chunk) {
-              await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
-                  .write(const ProductsCompanion(syncStatus: Value(0)));
-            }
-          },
-          'Products Batch',
-          onPermanentFailure: () async {
-            for (final prod in chunk) {
-              await (db.update(db.products)..where((t) => t.id.equals(prod.id)))
-                  .write(const ProductsCompanion(syncStatus: Value(2)));
-            }
-          },
-        );
-
-        if (success) {
-          syncedCounts['products'] = syncedCounts['products']! + chunk.length;
-        } else {
-          failedCounts['products'] = failedCounts['products']! + chunk.length;
-        }
-      }
-
-      // Customers
-      final pendingCustomers = await (db.select(
-        db.customers,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][customers] → ${pendingCustomers.length} ops');
-
-      for (final customer in pendingCustomers) {
-        final success = await _pushEntity(
-          'api/customers',
-          {
-            'uuid': customer.uuid,
-            'name': customer.name,
-            'phone': customer.phone,
-            'email': customer.email,
-            'address': customer.address,
-            'creditLimit': customer.creditLimit,
-            'currentBalance': customer.currentBalance,
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.customers)
-                  ..where((t) => t.id.equals(customer.id)))
-                .write(const CustomersCompanion(syncStatus: Value(0)));
-          },
-          'Customer: ${customer.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.customers)
-                  ..where((t) => t.id.equals(customer.id)))
-                .write(const CustomersCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['customers'] = syncedCounts['customers']! + 1;
-        } else {
-          failedCounts['customers'] = failedCounts['customers']! + 1;
-        }
-      }
-
-      // Suppliers
-      final pendingSuppliers = await (db.select(
-        db.suppliers,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][suppliers] → ${pendingSuppliers.length} ops');
-
-      for (final supplier in pendingSuppliers) {
-        final success = await _pushEntity(
-          'api/suppliers',
-          {
-            'uuid': supplier.uuid,
-            'name': supplier.name,
-            'phone': supplier.phone,
-            'email': supplier.email,
-            'address': supplier.address,
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.suppliers)
-                  ..where((t) => t.id.equals(supplier.id)))
-                .write(const SuppliersCompanion(syncStatus: Value(0)));
-          },
-          'Supplier: ${supplier.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.suppliers)
-                  ..where((t) => t.id.equals(supplier.id)))
-                .write(const SuppliersCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['suppliers'] = syncedCounts['suppliers']! + 1;
-        } else {
-          failedCounts['suppliers'] = failedCounts['suppliers']! + 1;
-        }
-      }
-
-      // Employees
-      final pendingEmployees = await (db.select(
-        db.employees,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][employees] → ${pendingEmployees.length} ops');
-
-      for (final employee in pendingEmployees) {
-        final success = await _pushEntity(
-          'api/employees',
-          {
-            'uuid': employee.uuid,
-            'name': employee.name,
-            'phone': employee.phone,
-            'email': employee.email,
-            'address': employee.address,
-            'role': employee.role,
-            'password': employee.password,
-            'authMethod': employee.googleAuth ? 'google' : 'manual',
-            'companyId': _tenantId,
-          },
-          () async {
-            await (db.update(db.employees)
-                  ..where((t) => t.id.equals(employee.id)))
-                .write(const EmployeesCompanion(syncStatus: Value(0)));
-          },
-          'Employee: ${employee.name}',
-          onPermanentFailure: () async {
-            await (db.update(db.employees)
-                  ..where((t) => t.id.equals(employee.id)))
-                .write(const EmployeesCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['employees'] = syncedCounts['employees']! + 1;
-        } else {
-          failedCounts['employees'] = failedCounts['employees']! + 1;
-        }
-      }
-
-      // Invoices (with invoice items - NOT synced independently)
-      final pendingInvoices = await (db.select(
-        db.invoices,
-      )..where((t) => t.syncStatus.equals(1))).get();
-      print('[SYNC][PUSH][invoices] → ${pendingInvoices.length} ops');
-
-      for (final inv in pendingInvoices) {
-        final itemsWithProducts = await (db.select(db.invoiceItems).join([
-          innerJoin(
-            db.products,
-            db.products.id.equalsExp(db.invoiceItems.productId),
-          ),
-        ])..where(db.invoiceItems.invoiceId.equals(inv.id))).get();
-
-        final customer = inv.customerId != null
-            ? await (db.select(
-                db.customers,
-              )..where((t) => t.id.equals(inv.customerId!))).getSingleOrNull()
-            : null;
-
-        final success = await _pushEntity(
-          'api/invoices',
-          {
-            'uuid': inv.uuid,
-            'invoiceNumber': inv.invoiceNumber,
-            'customerId': inv.customerId,
-            'customerUuid': customer?.uuid,
-            'date': inv.date.toIso8601String(),
-            'subtotal': inv.subtotal,
-            'tax': inv.tax,
-            'discount': inv.discount,
-            'total': inv.total,
-            'paymentMethod': inv.paymentMethod,
-            'companyId': _tenantId,
-            'items': itemsWithProducts.map((row) {
-              final e = row.readTable(db.invoiceItems);
-              final p = row.readTable(db.products);
-              return {
-                'uuid': e.uuid,
-                'productId': p.id,
-                'productUuid': p.uuid,
-                'quantity': e.quantity,
-                'unitPrice': e.unitPrice,
-                'totalPrice': e.totalPrice,
-                'bonus': e.bonus,
-                'discount': e.discount,
-              };
-            }).toList(),
-          },
-          () async {
-            await (db.update(db.invoices)..where((t) => t.id.equals(inv.id)))
-                .write(const InvoicesCompanion(syncStatus: Value(0)));
-          },
-          'Invoice: ${inv.invoiceNumber}',
-          onPermanentFailure: () async {
-            await (db.update(db.invoices)..where((t) => t.id.equals(inv.id)))
-                .write(const InvoicesCompanion(syncStatus: Value(2)));
-          },
-        );
-        if (success) {
-          syncedCounts['invoices'] = syncedCounts['invoices']! + 1;
-        } else {
-          failedCounts['invoices'] = failedCounts['invoices']! + 1;
-        }
-      }
-    } catch (e) {
-      errors.add('Unexpected error during sync: $e');
+      print(
+        '[SYNC][PUSH] ✓ Completed. Synced: $syncedCounts, Failed: $failedCounts',
+      );
+    } catch (e, st) {
+      errors.add('Unexpected push error: $e');
+      print('[SYNC][PUSH] ERROR: $e\n$st');
     }
 
-    final hasFailures = failedCounts.values.any((count) => count > 0);
+    final hasFailures = failedCounts.values.any((c) => c > 0);
     return SyncResult(
       success: !hasFailures && errors.isEmpty,
       syncedCounts: syncedCounts,
@@ -1210,34 +1184,172 @@ class SyncService {
     );
   }
 
-  Future<bool> _pushEntity(
-    String endpoint,
-    dynamic data,
-    Future<void> Function() onSuccess,
-    String entityDescription, {
-    Future<void> Function()? onPermanentFailure,
-  }) async {
-    try {
-      // X-Company-Id handled by AuthInterceptor - no manual header needed
-      final response = await dio.post(endpoint, data: data);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        await onSuccess();
-        return true;
-      } else {
-        return false;
-      }
-    } catch (e) {
-      if (e is DioException) {
-        // Mark as permanently failed on 400 — these will never succeed without manual intervention
-        if (e.response?.statusCode == 400) {
-          await onPermanentFailure?.call();
+  // ----------------------------------------------------------------------
+  // PRIVATE HELPERS FOR PUSH
+  // ----------------------------------------------------------------------
+
+  /// Collect all records with syncStatus=1 from every table
+  Future<List<_PendingOp>> _collectAllPendingOperations() async {
+    final ops = <_PendingOp>[];
+
+    Future<void> collect<T extends Table, D extends DataClass>(
+      TableInfo<T, D> table,
+      String tableName,
+      Map<String, dynamic> Function(D record) toMap,
+    ) async {
+      final records = await (db.select(
+        table,
+      )..where((t) => (t as dynamic).syncStatus.equals(1))).get();
+      for (final r in records) {
+        final uuid = (r as dynamic).uuid as String?;
+        final localId = (r as dynamic).id as int;
+        if (uuid == null || uuid.isEmpty) continue;
+
+        Map<String, dynamic> dataMap = toMap(r);
+
+        // For invoices, fetch and attach invoice items
+        if (tableName == 'invoices') {
+          final items = await _getInvoiceItems(localId);
+          dataMap['items'] = items;
         }
+
+        ops.add(_PendingOp(tableName, uuid, localId, dataMap));
       }
-      return false;
+    }
+
+    await collect(db.categories, 'categories', (e) => e.toJson());
+    await collect(db.units, 'units', (e) => e.toJson());
+    await collect(db.brands, 'brands', (e) => e.toJson());
+    await collect(db.products, 'products', (e) => e.toJson());
+    await collect(db.customers, 'customers', (e) => e.toJson());
+    await collect(db.suppliers, 'suppliers', (e) => e.toJson());
+    await collect(db.employees, 'employees', (e) => e.toJson());
+    await collect(db.invoices, 'invoices', (e) => e.toJson());
+
+    return ops;
+  }
+
+  /// Retrieve items for a given invoice (local ID)
+  Future<List<Map<String, dynamic>>> _getInvoiceItems(int invoiceId) async {
+    final rows = await (db.select(
+      db.invoiceItems,
+    )..where((t) => t.invoiceId.equals(invoiceId))).get();
+
+    final items = <Map<String, dynamic>>[];
+    for (final item in rows) {
+      // Optionally fetch product uuid for reference
+      final productUuid = item.productId != null
+          ? (await (db.select(db.products)
+                      ..where((t) => t.id.equals(item.productId!)))
+                    .getSingleOrNull())
+                ?.uuid
+          : null;
+
+      items.add({
+        'uuid': item.uuid,
+        'productUuid': productUuid,
+        'quantity': item.quantity,
+        'unitPrice': item.unitPrice,
+        'totalPrice': item.totalPrice,
+        'bonus': item.bonus,
+        'discount': item.discount,
+      });
+    }
+    return items;
+  }
+
+  /// Remove local-only fields that should not be sent to the server
+  Map<String, dynamic> _sanitizeData(Map<String, dynamic> data) {
+    final sanitized = Map<String, dynamic>.from(data);
+    sanitized.remove('id');
+    sanitized.remove('tenantId');
+    sanitized.remove('companyId'); // Server uses X-Company-Id header
+    sanitized.remove('syncStatus');
+    sanitized.remove('updatedAt');
+    sanitized.remove('createdAt');
+    sanitized.remove('uuid'); // Already in recordId
+    // Remove any other internal fields your tables may have, e.g.:
+    sanitized.remove('isDeleted'); // Usually handled via DELETE operation
+    return sanitized;
+  }
+
+  /// Mark a local record as synced (syncStatus = 0)
+  Future<void> _markSynced(_RecordRef ref) async {
+    switch (ref.table) {
+      case 'categories':
+        await (db.update(db.categories)..where((t) => t.id.equals(ref.localId)))
+            .write(const CategoriesCompanion(syncStatus: Value(0)));
+        break;
+      case 'units':
+        await (db.update(db.units)..where((t) => t.id.equals(ref.localId)))
+            .write(const UnitsCompanion(syncStatus: Value(0)));
+        break;
+      case 'brands':
+        await (db.update(db.brands)..where((t) => t.id.equals(ref.localId)))
+            .write(const BrandsCompanion(syncStatus: Value(0)));
+        break;
+      case 'products':
+        await (db.update(db.products)..where((t) => t.id.equals(ref.localId)))
+            .write(const ProductsCompanion(syncStatus: Value(0)));
+        break;
+      case 'customers':
+        await (db.update(db.customers)..where((t) => t.id.equals(ref.localId)))
+            .write(const CustomersCompanion(syncStatus: Value(0)));
+        break;
+      case 'suppliers':
+        await (db.update(db.suppliers)..where((t) => t.id.equals(ref.localId)))
+            .write(const SuppliersCompanion(syncStatus: Value(0)));
+        break;
+      case 'employees':
+        await (db.update(db.employees)..where((t) => t.id.equals(ref.localId)))
+            .write(const EmployeesCompanion(syncStatus: Value(0)));
+        break;
+      case 'invoices':
+        await (db.update(db.invoices)..where((t) => t.id.equals(ref.localId)))
+            .write(const InvoicesCompanion(syncStatus: Value(0)));
+        break;
     }
   }
 
-  /// Manually sync products from the server
+  /// Mark a local record as permanently failed (syncStatus = 2)
+  Future<void> _markFailed(_RecordRef ref) async {
+    switch (ref.table) {
+      case 'categories':
+        await (db.update(db.categories)..where((t) => t.id.equals(ref.localId)))
+            .write(const CategoriesCompanion(syncStatus: Value(2)));
+        break;
+      case 'units':
+        await (db.update(db.units)..where((t) => t.id.equals(ref.localId)))
+            .write(const UnitsCompanion(syncStatus: Value(2)));
+        break;
+      case 'brands':
+        await (db.update(db.brands)..where((t) => t.id.equals(ref.localId)))
+            .write(const BrandsCompanion(syncStatus: Value(2)));
+        break;
+      case 'products':
+        await (db.update(db.products)..where((t) => t.id.equals(ref.localId)))
+            .write(const ProductsCompanion(syncStatus: Value(2)));
+        break;
+      case 'customers':
+        await (db.update(db.customers)..where((t) => t.id.equals(ref.localId)))
+            .write(const CustomersCompanion(syncStatus: Value(2)));
+        break;
+      case 'suppliers':
+        await (db.update(db.suppliers)..where((t) => t.id.equals(ref.localId)))
+            .write(const SuppliersCompanion(syncStatus: Value(2)));
+        break;
+      case 'employees':
+        await (db.update(db.employees)..where((t) => t.id.equals(ref.localId)))
+            .write(const EmployeesCompanion(syncStatus: Value(2)));
+        break;
+      case 'invoices':
+        await (db.update(db.invoices)..where((t) => t.id.equals(ref.localId)))
+            .write(const InvoicesCompanion(syncStatus: Value(2)));
+        break;
+    }
+  }
+
+  // (Optional) Sync only products – kept for backward compatibility
   Future<bool> syncProducts() async {
     try {
       await pull();
@@ -1247,6 +1359,7 @@ class SyncService {
     }
   }
 
+  // Legacy full-sync method (used by forcePull)
   Future<void> _applyUpdates(Map<String, dynamic> updates) async {
     Future<void> upsert<T extends Table, D extends DataClass>(
       TableInfo<T, D> table,
@@ -1257,32 +1370,22 @@ class SyncService {
         for (var item in data) {
           try {
             final map = Map<String, dynamic>.from(item);
-
-            // Add default values for fields that might be missing from API
-            map['syncStatus'] = 0; // Mark as synced
-
-            // Map companyId from backend to tenantId for local database
+            map['syncStatus'] = 0;
             if (map.containsKey('companyId') && map['companyId'] != null) {
               map['tenantId'] = map['companyId'];
             }
-
-            // Add default updatedAt if missing (use createdAt or current time)
             if (!map.containsKey('updatedAt') || map['updatedAt'] == null) {
               map['updatedAt'] =
                   map['createdAt'] ?? DateTime.now().toIso8601String();
             }
-
-            // Add default isDeleted if missing
             if (!map.containsKey('isDeleted') || map['isDeleted'] == null) {
               map['isDeleted'] = false;
             }
-
             final entity = fromJson(map);
             await db
                 .into(table)
                 .insertOnConflictUpdate(entity as Insertable<D>);
           } catch (e) {
-            // If it's a UNIQUE constraint error (like SKU or UUID conflict), log it but continue
             if (e.toString().contains('UNIQUE constraint failed')) {
             } else {}
           }

@@ -5,7 +5,7 @@ class Products extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uuid => text().unique()();
   TextColumn get name => text().withLength(min: 1, max: 255)();
-  TextColumn get sku => text().unique().nullable()();
+  TextColumn get sku => text().nullable()();
   // Simplified for Product Master only - removing foreign keys to missing tables
   IntColumn get categoryId => integer().nullable()();
   IntColumn get unitId => integer().nullable()();

@@ -29,7 +29,9 @@ class AuthRepositoryImpl implements AuthRepository {
       'DEBUG [AuthRepository] Login response token: ${token != null ? "${token.substring(0, 20)}..." : "NULL"}',
     );
     if (token != null) {
+      print('[AUTH][STORE] Writing auth_token, storage hashCode: ${_storage.hashCode}');
       await _storage.write(key: 'auth_token', value: token);
+      print('[AUTH][STORE] Verified read-back: ${await _storage.read(key: 'auth_token') != null}');
       print('DEBUG [AuthRepository] Token written to storage');
 
       // Store company.id for X-Company-Id header
